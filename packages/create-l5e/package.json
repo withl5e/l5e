@@ -1,6 +1,6 @@
 {
   "name": "create-l5e",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.1-alpha.1",
   "description": "Create an L5E app from the official starter template.",
   "type": "module",
   "license": "MIT",
@@ -20,6 +20,6 @@
     "node": ">=20.19.0"
   },
   "publishConfig": {
-    "tag": "alpha"
+    "tag": "latest"
   }
 }
