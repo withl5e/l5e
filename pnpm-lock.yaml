@@ -41,12 +41,6 @@ importers:
       '@withl5e/l5e':
         specifier: workspace:*
         version: link:../../packages/core
-      esbuild:
-        specifier: ^0.24.2
-        version: 0.24.2
-      rollup:
-        specifier: ^4.0.0
-        version: 4.60.4
     devDependencies:
       cross-env:
         specifier: ^7.0.3

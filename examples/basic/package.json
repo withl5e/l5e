@@ -10,9 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@withl5e/l5e": "workspace:*",
-    "esbuild": "^0.24.2",
-    "rollup": "^4.0.0"
+    "@withl5e/l5e": "workspace:*"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",

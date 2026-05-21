@@ -1,8 +1,31 @@
 /// <reference path="./jsx-types.d.ts" />
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { rollup, type OutputOptions, type RollupOptions } from 'rollup';
+import { pathToFileURL } from 'node:url';
+import type { OutputOptions, RollupOptions } from 'rollup';
+
+let rollupModulePromise: Promise<typeof import('rollup')> | null = null;
+
+/**
+ * Resolve rollup lazily. We can't `import 'rollup'` directly because when the
+ * framework gets bundled into the consumer's SSR output the bare specifier is
+ * hoisted to a static import that pnpm doesn't satisfy. Resolve through `vite`
+ * instead — vite is a peer dep so it's always installed, and it always ships
+ * rollup as a direct dependency.
+ */
+function loadRollup(): Promise<typeof import('rollup')> {
+  if (!rollupModulePromise) {
+    rollupModulePromise = (async () => {
+      const require = createRequire(import.meta.url);
+      const vitePath = require.resolve('vite');
+      const rollupPath = require.resolve('rollup', { paths: [path.dirname(vitePath)] });
+      return (await import(pathToFileURL(rollupPath).href)) as typeof import('rollup');
+    })();
+  }
+  return rollupModulePromise;
+}
 
 interface BundledFile {
   content: string;
@@ -142,6 +165,7 @@ export async function bundleScripts(
       chunkFileNames: 'bundle-[hash].js',
     };
 
+    const { rollup } = await loadRollup();
     const bundle = await rollup(rollupOptions);
     const { output } = await bundle.generate(outputOptions);
     await bundle.close();
