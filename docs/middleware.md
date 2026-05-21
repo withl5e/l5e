@@ -4,7 +4,7 @@ L5E middleware receives a Web `Request`, parsed URL data, cookies, locals and a 
 It can return a `Response`, modify response headers, or rewrite the request before render.
 
 ```ts
-import { defineMiddleware, sequence } from '@l5e/core/middleware';
+import { defineMiddleware, sequence } from '@withl5e/l5e/middleware';
 
 const rewriteDemo = defineMiddleware((context, next) => {
   if (context.url.pathname === '/rewrite-demo') {

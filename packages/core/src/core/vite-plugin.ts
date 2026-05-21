@@ -56,7 +56,7 @@ function shortHash(str: string): string {
 }
 
 /**
- * Derive component name from path: "./react/Counter" → "Counter"
+ * Derive component name from path: "./react/Counter" â†’ "Counter"
  */
 function deriveComponentName(fromPath: string): string {
   const segments = fromPath.split('/');
@@ -67,7 +67,7 @@ function deriveComponentName(fromPath: string): string {
 }
 
 /**
- * Create island registry key: "/src/views/test-island/react/Counter" → "Counter_a3f2"
+ * Create island registry key: "/src/views/test-island/react/Counter" â†’ "Counter_a3f2"
  */
 function makeIslandKey(resolvedPath: string): string {
   const name = deriveComponentName(resolvedPath);
@@ -108,7 +108,7 @@ function extractIslandEntries(
   const entries: Array<{ component: string; resolvedPath: string; src: string; key: string }> = [];
 
   // Regex scan JSX source (NOT post-transform code).
-  // Just find <ClientIsland ... from="Y" ...> — component name derived from path.
+  // Just find <ClientIsland ... from="Y" ...> â€” component name derived from path.
   const regex = /<ClientIsland\s[^>]*?from\s*=\s*"([^"]+)"/g;
 
   const seen = new Set<string>();
@@ -117,10 +117,10 @@ function extractIslandEntries(
   while ((match = regex.exec(content)) !== null) {
     const fromPath = match[1];
 
-    // Resolve relative path → absolute
+    // Resolve relative path â†’ absolute
     let resolvedPath: string;
     if (fromPath.startsWith('~/')) {
-      // Alias ~/  → /src/ (project convention)
+      // Alias ~/  â†’ /src/ (project convention)
       resolvedPath = '/src/' + fromPath.substring(2);
     } else if (fromPath.startsWith('/src/')) {
       resolvedPath = fromPath;
@@ -146,7 +146,7 @@ function extractIslandEntries(
       entries.push({
         component: deriveComponentName(resolvedPath),
         resolvedPath,
-        src, // "src/views/.../Counter.tsx" — matches manifest key format
+        src, // "src/views/.../Counter.tsx" â€” matches manifest key format
         key,
       });
     }
@@ -216,11 +216,11 @@ function discoverRollupInput(rootDir: string): {
   const srcDir = join(rootDir, 'src');
 
   // Island registries
-  const islandRegistry = new Map<string, string>(); // key → resolvedPath
-  const pathToKey = new Map<string, string>(); // resolvedPath → key
-  const keyToSrc = new Map<string, string>(); // key → src (manifest-compatible path with extension)
+  const islandRegistry = new Map<string, string>(); // key â†’ resolvedPath
+  const pathToKey = new Map<string, string>(); // resolvedPath â†’ key
+  const keyToSrc = new Map<string, string>(); // key â†’ src (manifest-compatible path with extension)
 
-  // Action registry: actionKey → { modulePath, actionName }
+  // Action registry: actionKey â†’ { modulePath, actionName }
   const actionRegistry = new Map<string, { modulePath: string; actionName: string }>();
 
   try {
@@ -442,7 +442,7 @@ export function coreVite(): Plugin {
           server.moduleGraph.invalidateModule(mod);
         }
         console.log(
-          `[l5e] Action file changed: ${relPath} — re-scanned ${actionRegistry.size} action(s)`,
+          `[l5e] Action file changed: ${relPath} â€” re-scanned ${actionRegistry.size} action(s)`,
         );
       }
 
@@ -519,7 +519,7 @@ export function coreVite(): Plugin {
           rollupOptions: {
             ...userConfig.build?.rollupOptions,
             input: Object.keys(mergedInput).length > 0 ? mergedInput : undefined,
-            // Preserve exports for island component entries — without this,
+            // Preserve exports for island component entries â€” without this,
             // Rollup tree-shakes their exports since nothing in the bundle imports them
             // (they're loaded at runtime via dynamic import from the island runtime).
             preserveEntrySignatures: 'exports-only',
@@ -557,7 +557,7 @@ export function coreVite(): Plugin {
       // Auto-inject island runtime into client.global.ts so it's always loaded globally
       if (id.replace(/\\/g, '/').endsWith('src/client.global.ts') && !options?.ssr) {
         return {
-          code: `import '@l5e/core/island/runtime';\n${code}`,
+          code: `import '@withl5e/l5e/island/runtime';\n${code}`,
           map: null,
         };
       }
@@ -576,7 +576,7 @@ export function coreVite(): Plugin {
           let m;
           while ((m = exportRegex.exec(code)) !== null) {
             const name = m[1];
-            // Find method for this action — scan from the defineAction( position
+            // Find method for this action â€” scan from the defineAction( position
             const chunk = code.substring(m.index, m.index + 500);
             const methodMatch = chunk.match(/method:\s*['"](\w+)['"]/);
             const method = methodMatch ? methodMatch[1].toUpperCase() : 'GET';
@@ -627,7 +627,7 @@ export function coreVite(): Plugin {
 
       if (isJsxFile) {
         try {
-          const injected = `import { Fragment as __Fragment, jsxFactory } from "@l5e/core/jsx-runtime"\n${code}`;
+          const injected = `import { Fragment as __Fragment, jsxFactory } from "@withl5e/l5e/jsx-runtime"\n${code}`;
 
           // Transform JSX using esbuild with L5E's JSX runtime (async)
           const result = await transform(injected, {
@@ -658,15 +658,15 @@ export function coreVite(): Plugin {
         }
       }
 
-      // Transform import.meta.env thành process.env ở server side
-      // Server side có thể access tất cả env variables
-      // Client side chỉ access được VITE_ env variables
-      // Transform này chạy ở runtime khi module được load trong SSR context
+      // Transform import.meta.env thÃ nh process.env á»Ÿ server side
+      // Server side cÃ³ thá»ƒ access táº¥t cáº£ env variables
+      // Client side chá»‰ access Ä‘Æ°á»£c VITE_ env variables
+      // Transform nÃ y cháº¡y á»Ÿ runtime khi module Ä‘Æ°á»£c load trong SSR context
       if (options?.ssr) {
         let transformedCode = code;
         let hasChanges = false;
 
-        // Thay thế import.meta.env.VARIABLE_NAME thành process.env.VARIABLE_NAME
+        // Thay tháº¿ import.meta.env.VARIABLE_NAME thÃ nh process.env.VARIABLE_NAME
         // Match: import.meta.env.VITE_EVENT_CATEGORY_SLUG
         transformedCode = transformedCode.replace(
           /import\.meta\.env\.([a-zA-Z_][a-zA-Z0-9_]*)/g,
@@ -676,9 +676,9 @@ export function coreVite(): Plugin {
           },
         );
 
-        // Thay thế import.meta.env['VARIABLE_NAME'] hoặc import.meta.env["VARIABLE_NAME"]
-        // thành process.env['VARIABLE_NAME'] hoặc process.env["VARIABLE_NAME"]
-        // Match: import.meta.env['VITE_EVENT_CATEGORY_SLUG'] hoặc import.meta.env["VITE_EVENT_CATEGORY_SLUG"]
+        // Thay tháº¿ import.meta.env['VARIABLE_NAME'] hoáº·c import.meta.env["VARIABLE_NAME"]
+        // thÃ nh process.env['VARIABLE_NAME'] hoáº·c process.env["VARIABLE_NAME"]
+        // Match: import.meta.env['VITE_EVENT_CATEGORY_SLUG'] hoáº·c import.meta.env["VITE_EVENT_CATEGORY_SLUG"]
         transformedCode = transformedCode.replace(
           /import\.meta\.env\[(['"`])([^'"`]+)\1\]/g,
           (match, quote, varName) => {
@@ -690,7 +690,7 @@ export function coreVite(): Plugin {
         if (hasChanges) {
           return {
             code: transformedCode,
-            map: null, // Không cần source map cho env transform
+            map: null, // KhÃ´ng cáº§n source map cho env transform
           };
         }
       }
@@ -714,7 +714,7 @@ export const viewComponents = import.meta.glob('/src/views/*/index.tsx');
 
       // Virtual module: l5e-ssr-entry
       if (id === '\0' + VIRTUAL_L5E_SSR_ENTRY) {
-        return `export { render } from '@l5e/core/entry-server';
+        return `export { render } from '@withl5e/l5e/entry-server';
 export { viewActions } from 'virtual:l5e-actions';`;
       }
 
@@ -764,10 +764,10 @@ export async function loadMiddleware() {
         // Check if src/island-strategies.ts exists
         const strategiesFile = join(rootDir, 'src', 'island-strategies.ts');
         if (existsSync(strategiesFile)) {
-          // Re-export user's file → Vite will build this file
+          // Re-export user's file â†’ Vite will build this file
           return `import '/src/island-strategies.ts';`;
         }
-        // No file → empty module, no error
+        // No file â†’ empty module, no error
         return `/* no custom island strategies */`;
       }
 

@@ -1,6 +1,6 @@
 # Payload Rich Text Adapter
 
-Payload/Lexical rich text rendering lives in `@l5e/richtext-payload`, not in `@l5e/core`.
+Payload/Lexical rich text rendering lives in `@withl5e/richtext-payload`, not in `@withl5e/l5e`.
 
 This keeps core apps from installing Payload dependencies when they only need SSR, middleware,
 loaders, SEO, actions, swap or islands.
@@ -8,13 +8,13 @@ loaders, SEO, actions, swap or islands.
 Install:
 
 ```sh
-pnpm add @l5e/richtext-payload @payloadcms/richtext-lexical lexical payload
+pnpm add @withl5e/richtext-payload @payloadcms/richtext-lexical lexical payload
 ```
 
 Render:
 
 ```tsx
-import { convertLexicalToJSX, defaultJSXConverters } from '@l5e/richtext-payload';
+import { convertLexicalToJSX, defaultJSXConverters } from '@withl5e/richtext-payload';
 
 export function RichText({ data }) {
   return convertLexicalToJSX({

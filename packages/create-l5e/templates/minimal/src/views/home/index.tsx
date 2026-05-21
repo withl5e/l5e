@@ -1,5 +1,5 @@
-import { Fragment, useCss } from '@l5e/core/jsx-runtime';
-import { MetadataRenderer } from '@l5e/core/seo';
+import { Fragment, useCss } from '@withl5e/l5e/jsx-runtime';
+import { MetadataRenderer } from '@withl5e/l5e/seo';
 
 import type { HomeLoaderData } from './loader';
 

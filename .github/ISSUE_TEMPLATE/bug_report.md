@@ -8,7 +8,7 @@ assignees: ''
 
 ## Package
 
-`@l5e/core` or `@l5e/richtext-payload`
+`@withl5e/l5e` or `@withl5e/richtext-payload`
 
 ## Version
 

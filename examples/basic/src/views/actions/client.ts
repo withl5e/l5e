@@ -1,4 +1,4 @@
-import { createSwap } from '@l5e/core/swap';
+import { createSwap } from '@withl5e/l5e/swap';
 import { loadServerTime } from './actions';
 
 createSwap({

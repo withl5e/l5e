@@ -8,7 +8,7 @@
   "packageManager": "pnpm@11.0.9",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm --filter @l5e/core test",
+    "test": "pnpm --filter @withl5e/l5e test",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {

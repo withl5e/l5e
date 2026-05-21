@@ -1,4 +1,4 @@
-import { coreVite } from '@l5e/core/vite-plugin';
+import { coreVite } from '@withl5e/l5e/vite-plugin';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
@@ -19,10 +19,10 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['@l5e/core'],
+    exclude: ['@withl5e/l5e'],
   },
   ssr: {
-    noExternal: ['@l5e/core'],
+    noExternal: ['@withl5e/l5e'],
     external: ['rollup', 'esbuild', 'fsevents'],
   },
   resolve: {

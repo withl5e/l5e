@@ -4,7 +4,7 @@
     "jsx": "preserve",
     "jsxFactory": "jsxFactory",
     "jsxFragmentFactory": "Fragment",
-    "types": ["vite/client", "@l5e/core/jsx-types"]
+    "types": ["vite/client", "@withl5e/l5e/jsx-types"]
   },
   "include": ["index.ts", "src/**/*", "vite.config.ts"]
 }

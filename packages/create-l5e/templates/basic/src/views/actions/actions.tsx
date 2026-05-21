@@ -1,4 +1,4 @@
-import { defineAction } from '@l5e/core/action';
+import { defineAction } from '@withl5e/l5e/action';
 
 export const loadServerTime = defineAction({
   method: 'GET',

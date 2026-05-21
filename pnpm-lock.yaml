@@ -38,7 +38,7 @@ importers:
 
   examples/basic:
     dependencies:
-      '@l5e/core':
+      '@withl5e/l5e':
         specifier: workspace:*
         version: link:../../packages/core
       esbuild:
@@ -121,12 +121,12 @@ importers:
         specifier: 13.0.0
         version: 13.0.0
     devDependencies:
-      '@l5e/core':
-        specifier: workspace:*
-        version: link:../core
       '@payloadcms/richtext-lexical':
         specifier: 3.73.0
         version: 3.73.0(@faceless-ui/modal@3.0.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(@faceless-ui/scroll-info@2.0.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(@payloadcms/next@3.73.0(@types/react@19.2.14)(graphql@16.14.0)(monaco-editor@0.55.1)(next@16.2.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(sass@1.77.4))(payload@3.73.0(graphql@16.14.0)(typescript@5.9.3))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@5.9.3))(@types/react@19.2.14)(monaco-editor@0.55.1)(next@16.2.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(sass@1.77.4))(payload@3.73.0(graphql@16.14.0)(typescript@5.9.3))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@5.9.3)(yjs@13.6.30)
+      '@withl5e/l5e':
+        specifier: workspace:*
+        version: link:../core
       lexical:
         specifier: 0.39.0
         version: 0.39.0

@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
 const externalPackages = [
-  '@l5e/core',
+  '@withl5e/l5e',
   '@payloadcms/richtext-lexical',
   'lexical',
   'payload',
@@ -14,7 +14,7 @@ export default defineConfig({
     jsxFactory: 'jsxFactory',
     jsxFragment: '__Fragment',
     jsxInject:
-      'import { Fragment as __Fragment, jsxFactory } from "@l5e/core/jsx-runtime";',
+      'import { Fragment as __Fragment, jsxFactory } from "@withl5e/l5e/jsx-runtime";',
   },
   build: {
     lib: {

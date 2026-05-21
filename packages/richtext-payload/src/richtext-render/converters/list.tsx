@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { Fragment } from '@l5e/core/jsx-runtime';
+import { Fragment } from '@withl5e/l5e/jsx-runtime';
 
 import type { SerializedListItemNode, SerializedListNode } from '@payloadcms/richtext-lexical';
 import type { JSXConverters } from '../types.js';

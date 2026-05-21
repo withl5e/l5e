@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
-import { cloneElement, Fragment, isValidElement } from '@l5e/core/jsx-runtime';
+import { cloneElement, Fragment, isValidElement } from '@withl5e/l5e/jsx-runtime';
 
 import type { SerializedBlockNode, SerializedInlineBlockNode } from '@payloadcms/richtext-lexical';
 import { hasText } from '@payloadcms/richtext-lexical/shared';

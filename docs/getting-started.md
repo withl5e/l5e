@@ -47,7 +47,7 @@ vite.config.js
 Use L5E JSX in view files:
 
 ```tsx
-import { useCss } from '@l5e/core/jsx-runtime';
+import { useCss } from '@withl5e/l5e/jsx-runtime';
 
 export default function HomePage() {
   useCss('./home.css');
@@ -58,7 +58,7 @@ export default function HomePage() {
 Use a route function to map the request to a view:
 
 ```ts
-import type { RequestInfo } from '@l5e/core/entry-server';
+import type { RequestInfo } from '@withl5e/l5e/entry-server';
 
 export default function routeHandler(requestInfo: RequestInfo) {
   if (requestInfo.pathname === '/') return 'home';
@@ -69,7 +69,7 @@ export default function routeHandler(requestInfo: RequestInfo) {
 Start the server:
 
 ```ts
-import { startServer } from '@l5e/core/server';
+import { startServer } from '@withl5e/l5e/server';
 
 startServer({
   root: process.cwd(),

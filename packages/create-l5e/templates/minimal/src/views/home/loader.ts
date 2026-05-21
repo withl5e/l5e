@@ -1,4 +1,4 @@
-import type { LoaderFunction, LoaderResult } from '@l5e/core/entry-server';
+import type { LoaderFunction, LoaderResult } from '@withl5e/l5e/entry-server';
 
 export type HomeLoaderData = {
   now: string;

@@ -2,8 +2,8 @@
 
 ## Alpha
 
-- publish `@l5e/core` as an alpha package
-- publish `@l5e/richtext-payload` as an optional adapter
+- publish `@withl5e/l5e` as an alpha package
+- publish `@withl5e/richtext-payload` as an optional adapter
 - keep docs focused on actual usage, not internals first
 - ship a minimal starter and a few focused examples
 - mark unstable APIs clearly

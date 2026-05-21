@@ -1,4 +1,4 @@
-import { startServer } from '@l5e/core/server';
+import { startServer } from '@withl5e/l5e/server';
 
 startServer({
   root: process.cwd(),

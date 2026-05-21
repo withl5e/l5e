@@ -422,7 +422,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
       appType: 'custom',
       base,
       optimizeDeps: {
-        exclude: ['@l5e/core', 'file-type'],
+        exclude: ['@withl5e/l5e', 'file-type'],
       },
       ssr: {
         resolve: {
@@ -442,8 +442,8 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
     app.use(compression());
     app.use(base, sirv(distClientDir, { extensions: [] }));
 
-    // Route để serve bundled files từ memory map
-    // Đặt route này trước route HTML để catch request trước
+    // Route Ä‘á»ƒ serve bundled files tá»« memory map
+    // Äáº·t route nÃ y trÆ°á»›c route HTML Ä‘á»ƒ catch request trÆ°á»›c
     app.get(
       `${base === '/' ? '' : base}/bundle-:hash.:ext`,
       async (req: ExpressRequest, res: ExpressResponse) => {
@@ -469,7 +469,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
     );
   }
 
-  // Action routes — JSON body parsing scoped to action endpoints only
+  // Action routes â€” JSON body parsing scoped to action endpoints only
   app.use('/_l5e/action', express.json({ limit: '100kb' }));
 
   // Validate action key format: actionName_hexHash
@@ -507,7 +507,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
     return prodViewActions!;
   }
 
-  // Action route handler — hashed action keys
+  // Action route handler â€” hashed action keys
   // URL: /_l5e/action/:actionKey  (e.g., /_l5e/action/loadMoreComments_a1b2)
   app.all('/_l5e/action/:actionKey', async (req: ExpressRequest, res: ExpressResponse) => {
     try {
@@ -549,7 +549,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
         actionModule = await viewActions[globKey]();
       }
 
-      // Look up exported action — use hasOwnProperty to avoid prototype pollution
+      // Look up exported action â€” use hasOwnProperty to avoid prototype pollution
       if (!Object.prototype.hasOwnProperty.call(actionModule, actionName)) {
         return res.status(404).send('Action not found');
       }
@@ -578,10 +578,10 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
       const entryServerPath = path.join(root, './dist/server/entry-server.js');
       const { runInRenderContext } = await (isProduction
         ? import(pathToFileURL(entryServerPath).href)
-        : vite!.ssrLoadModule('@l5e/core/jsx-runtime'));
+        : vite!.ssrLoadModule('@withl5e/l5e/jsx-runtime'));
       const { renderJsxToHtmlString } = await (isProduction
         ? import(pathToFileURL(entryServerPath).href)
-        : vite!.ssrLoadModule('@l5e/core'));
+        : vite!.ssrLoadModule('@withl5e/l5e'));
 
       // Run action handler in render context (needed for JSX)
       const html = await runInRenderContext(
@@ -625,7 +625,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
         }
 
         const entryServer = (await vite!.ssrLoadModule(
-          '@l5e/core/entry-server',
+          '@withl5e/l5e/entry-server',
         )) as EntryServerModule;
         render = entryServer.render;
         loadMiddleware = entryServer.loadMiddleware;

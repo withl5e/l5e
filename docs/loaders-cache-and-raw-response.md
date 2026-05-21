@@ -3,7 +3,7 @@
 A view can export a loader that returns props and cache policy.
 
 ```ts
-import type { LoaderFunction } from '@l5e/core/entry-server';
+import type { LoaderFunction } from '@withl5e/l5e/entry-server';
 
 export const loader: LoaderFunction<{ title: string }> = async () => {
   return {

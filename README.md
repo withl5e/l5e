@@ -9,9 +9,9 @@ cache that response with normal HTTP headers and cache tags.
 
 ## Packages
 
-- `@l5e/core`: SSR renderer, Vite plugin, loader contract, middleware, SEO helpers, islands,
+- `@withl5e/l5e`: SSR renderer, Vite plugin, loader contract, middleware, SEO helpers, islands,
   actions, swap and tooltip runtime.
-- `@l5e/richtext-payload`: optional Payload Lexical renderer adapter. It is separate so the core
+- `@withl5e/richtext-payload`: optional Payload Lexical renderer adapter. It is separate so the core
   package does not force Payload dependencies into every app.
 - `create-l5e`: starter app generator for `npm create l5e`.
 
@@ -87,8 +87,8 @@ Read more in `docs/design-decisions.md`.
 Publish the packages from an authenticated npm session:
 
 ```sh
-pnpm --filter @l5e/core publish --tag alpha
-pnpm --filter @l5e/richtext-payload publish --tag alpha
+pnpm --filter @withl5e/l5e publish --tag alpha
+pnpm --filter @withl5e/richtext-payload publish --tag alpha
 pnpm --filter create-l5e publish --tag alpha
 ```
 

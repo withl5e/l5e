@@ -1,5 +1,5 @@
-import { Fragment, useClientJs, useCss } from '@l5e/core/jsx-runtime';
-import { MetadataRenderer } from '@l5e/core/seo';
+import { Fragment, useClientJs, useCss } from '@withl5e/l5e/jsx-runtime';
+import { MetadataRenderer } from '@withl5e/l5e/seo';
 
 export default function ActionsPage() {
   useCss('./actions.css');
