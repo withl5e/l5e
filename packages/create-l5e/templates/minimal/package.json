@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && vite build --ssr src/entry-server.ts --outDir dist/server && vite build --ssr server.ts --outDir dist --emptyOutDir false",
-    "preview": "cross-env NODE_ENV=production node dist/server.js",
+    "start": "cross-env NODE_ENV=production node dist/server.js",
+    "preview": "npm run build && npm run start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@withl5e/l5e": "^0.1.1-alpha.1",
+    "@withl5e/l5e": "^0.1.1-alpha.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

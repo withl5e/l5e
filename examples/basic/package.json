@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=--conditions=development tsx server.ts",
+    "dev": "tsx server.ts",
     "build": "vite build && vite build --ssr src/entry-server.ts --outDir dist/server && vite build --ssr server.ts --outDir dist --emptyOutDir false",
-    "preview": "cross-env NODE_ENV=production node dist/server.js",
+    "start": "cross-env NODE_ENV=production node dist/server.js",
+    "preview": "npm run build && npm run start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

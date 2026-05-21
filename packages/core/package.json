@@ -1,6 +1,6 @@
 {
   "name": "@withl5e/l5e",
-  "version": "0.1.1-alpha.1",
+  "version": "0.1.1-alpha.2",
   "description": "HTML-first SSR MPA framework with loaders, middleware, islands, actions, swap, SEO and cache controls.",
   "type": "module",
   "license": "MIT",
@@ -17,77 +17,62 @@
   "exports": {
     ".": {
       "types": "./src/core/index.ts",
-      "development": "./index.ts",
       "default": "./dist/index.js"
     },
     "./jsx-runtime": {
       "types": "./src/core/jsx-runtime.ts",
-      "development": "./src/core/jsx-runtime.ts",
       "default": "./dist/jsx-runtime.js"
     },
     "./vite-plugin": {
       "types": "./src/core/vite-plugin.ts",
-      "development": "./src/core/vite-plugin.ts",
       "default": "./dist/vite-plugin.js"
     },
     "./server": {
       "types": "./src/core/server.ts",
-      "development": "./src/core/server.ts",
       "default": "./dist/server.js"
     },
     "./entry-server": {
       "types": "./src/core/entry-server.d.ts",
-      "development": "./src/core/entry-server.ts",
       "default": "./dist/entry-server.js"
     },
     "./middleware": {
       "types": "./src/middleware/index.ts",
-      "development": "./src/middleware/index.ts",
       "default": "./dist/middleware.js"
     },
     "./tooltip": {
       "types": "./src/tooltip/index.ts",
-      "development": "./src/tooltip/index.ts",
       "default": "./dist/tooltip.js"
     },
     "./jsx-types": {
       "types": "./src/core/jsx-types.d.ts",
-      "development": "./src/core/jsx-types.d.ts",
       "default": "./src/core/jsx-types.d.ts"
     },
     "./seo": {
       "types": "./src/seo/index.ts",
-      "development": "./src/seo/index.ts",
       "default": "./dist/seo.js"
     },
     "./swap": {
       "types": "./src/swap/index.ts",
-      "development": "./src/swap/index.ts",
       "default": "./dist/swap.js"
     },
     "./swap/server": {
       "types": "./src/swap/server.ts",
-      "development": "./src/swap/server.ts",
       "default": "./dist/swap/server.js"
     },
     "./action": {
       "types": "./src/action/index.ts",
-      "development": "./src/action/index.ts",
       "default": "./dist/action.js"
     },
     "./island": {
       "types": "./src/island/index.ts",
-      "development": "./src/island/index.ts",
       "default": "./dist/island.js"
     },
     "./island/client": {
       "types": "./src/island/client.ts",
-      "development": "./src/island/client.ts",
       "default": "./dist/island/client.js"
     },
     "./island/runtime": {
       "types": "./src/island/runtime.ts",
-      "development": "./src/island/runtime.ts",
       "default": "./dist/island/runtime.js"
     }
   },
