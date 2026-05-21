@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm build *)",
+      "PowerShell(Get-Process *1)",
+      "PowerShell(cmd /c \"move E:\\\\workspace-2026\\\\l5e\\\\packages\\\\create-l5e E:\\\\workspace-2026\\\\l5e\\\\packages\\\\create-l5e 2>&1\")",
+      "Bash(git mv *)",
+      "Bash(Get-ChildItem -Path \"E:\\\\workspace-2026\\\\l5e\" -Directory -Depth 0)",
+      "Bash(Select-Object Name)",
+      "Bash(xargs grep -l \"duck\")",
+      "Bash(rm -rf .git)",
+      "Bash(git init *)",
+      "Bash(git config *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}

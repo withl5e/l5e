@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxFactory": "jsxFactory",
+    "jsxFragmentFactory": "Fragment",
+    "types": ["vite/client", "@l5e/core/jsx-types"]
+  },
+  "include": ["index.ts", "src/**/*", "vite.config.ts"]
+}

@@ -1,0 +1,13 @@
+.home-panel h1 {
+  margin: 0 0 12px;
+}
+
+.home-panel p {
+  max-width: 64ch;
+}
+
+.timestamp {
+  margin-top: 24px;
+  color: #5f6f85;
+  font-size: 0.95rem;
+}

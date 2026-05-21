@@ -1,0 +1,25 @@
+{
+  "name": "create-l5e",
+  "version": "0.1.0-alpha.0",
+  "description": "Create an L5E app from the official starter template.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "create-l5e": "./bin/create-l5e.js"
+  },
+  "files": [
+    "bin",
+    "templates",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node --check bin/create-l5e.js",
+    "typecheck": "node --check bin/create-l5e.js"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "tag": "alpha"
+  }
+}

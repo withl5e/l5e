@@ -1,0 +1,12 @@
+node_modules
+.pnpm-store
+dist
+.turbo
+.vite
+.l5e-temp
+.temp-bundle
+coverage
+*.log
+.env
+.env.*
+!.env.example

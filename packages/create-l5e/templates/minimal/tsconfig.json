@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "types": ["vite/client"],
+    "moduleResolution": "Bundler",
+    "lib": ["ES2024", "DOM"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "noEmit": true,
+    "sourceMap": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "jsxFactory": "jsxFactory",
+    "jsxFragmentFactory": "Fragment",
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["src/*"]
+    }
+  },
+  "include": ["src/**/*", "server.ts", "vite.config.js"]
+}

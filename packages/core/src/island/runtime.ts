@@ -1,0 +1,149 @@
+import type { IslandMeta } from './types';
+import { strategies, registerMountStrategy } from './strategy-registry';
+
+// ============================================================
+// PART 1: Built-in strategies
+// ============================================================
+
+registerMountStrategy('load', (mount) => {
+  mount();
+});
+
+registerMountStrategy('idle', (mount) => {
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => mount());
+  } else {
+    setTimeout(() => mount(), 200);
+  }
+});
+
+registerMountStrategy('visible', (mount, opts, el) => {
+  const rootMargin = opts || '200px';
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          observer.disconnect();
+          mount();
+        }
+      });
+    },
+    { rootMargin },
+  );
+  observer.observe(el);
+  return () => observer.disconnect();
+});
+
+registerMountStrategy('media', (mount, opts) => {
+  if (!opts) {
+    console.error('[l5e-island] Strategy "media" requires mountOpts (media query)');
+    return;
+  }
+  const mql = window.matchMedia(opts);
+  if (mql.matches) {
+    mount();
+  } else {
+    const handler = (e: MediaQueryListEvent) => {
+      if (e.matches) mount();
+    };
+    mql.addEventListener('change', handler, { once: true });
+    return () => mql.removeEventListener('change', handler);
+  }
+});
+
+registerMountStrategy('none', () => {
+  // Don't mount - keep placeholder as-is
+});
+
+// ============================================================
+// PART 2: Import custom strategies (if any)
+// ============================================================
+
+import 'virtual:l5e-island-strategies';
+
+// ============================================================
+// PART 3: Island discovery + mount logic
+// ============================================================
+
+// Per-page island registry injected by server.ts as inline script
+// Format: { "Counter_a3f2": "/assets/Counter-Abc123.js" }
+const islandRegistry: Record<string, string> = (window as any).__L5E_ISLANDS__ || {};
+
+function discoverIslands(): IslandMeta[] {
+  return Array.from(document.querySelectorAll('[data-island]')).map((el) => ({
+    element: el as HTMLElement,
+    registryKey: el.getAttribute('data-island')!,
+    exportName: el.getAttribute('data-island-name')!,
+    props: JSON.parse(el.getAttribute('data-island-props') || '{}'),
+    mount: el.getAttribute('data-island-mount') || 'load',
+    mountOpts: el.getAttribute('data-island-opts') || undefined,
+  }));
+}
+
+function createMountFn(island: IslandMeta): () => Promise<void> {
+  let mounted = false;
+  return async () => {
+    if (mounted) return;
+    mounted = true;
+
+    // Look up component URL from per-page registry
+    const url = islandRegistry[island.registryKey];
+    if (!url) {
+      console.error(
+        `[l5e-island] Component "${island.registryKey}" not found in page registry.`,
+        `Available: ${Object.keys(islandRegistry).join(', ')}`,
+      );
+      return;
+    }
+
+    try {
+      const [{ createRoot }, { createElement }, mod] = await Promise.all([
+        import('react-dom/client'),
+        import('react'),
+        import(/* @vite-ignore */ url),
+      ]);
+
+      const Component = mod.default || mod[island.exportName];
+      if (!Component) {
+        console.error(`[l5e-island] No export "default" or "${island.exportName}" in module`);
+        return;
+      }
+
+      const root = createRoot(island.element);
+      root.render(createElement(Component, island.props));
+    } catch (error) {
+      console.error(`[l5e-island] Failed to mount "${island.registryKey}":`, error);
+    }
+  };
+}
+
+function scheduleMount(island: IslandMeta) {
+  const strategy = strategies.get(island.mount);
+
+  if (!strategy) {
+    console.error(
+      `[l5e-island] Strategy "${island.mount}" not found.`,
+      `Available: ${[...strategies.keys()].join(', ')}`,
+      `\nDid you forget to registerMountStrategy("${island.mount}", ...)?`,
+    );
+    return;
+  }
+
+  const mountFn = createMountFn(island);
+  strategy(mountFn, island.mountOpts, island.element);
+}
+
+// ============================================================
+// PART 4: Boot
+// ============================================================
+
+function boot() {
+  const islands = discoverIslands();
+  islands.forEach(scheduleMount);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}

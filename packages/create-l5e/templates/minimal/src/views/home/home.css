@@ -1,0 +1,7 @@
+.home-panel h1 {
+  margin: 0 0 12px;
+}
+
+.home-panel p {
+  max-width: 64ch;
+}

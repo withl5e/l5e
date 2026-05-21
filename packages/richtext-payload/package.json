@@ -1,0 +1,52 @@
+{
+  "name": "@l5e/richtext-payload",
+  "version": "0.1.0-alpha.0",
+  "description": "Payload Lexical rich text renderer adapter for L5E.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./src/richtext-render/index.tsx",
+  "files": [
+    "dist",
+    "src",
+    "index.ts",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/richtext-render/index.tsx",
+      "development": "./index.ts",
+      "default": "./dist/index.js"
+    },
+    "./stringToLexical": {
+      "types": "./src/richtext-render/utils/stringToLexical.ts",
+      "development": "./src/richtext-render/utils/stringToLexical.ts",
+      "default": "./dist/stringToLexical.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "uuid": "13.0.0"
+  },
+  "peerDependencies": {
+    "@l5e/core": "^0.1.0-alpha.0",
+    "@payloadcms/richtext-lexical": "^3.73.0",
+    "lexical": "^0.39.0",
+    "payload": "^3.73.0"
+  },
+  "devDependencies": {
+    "@l5e/core": "workspace:*",
+    "@payloadcms/richtext-lexical": "3.73.0",
+    "lexical": "0.39.0",
+    "payload": "3.73.0",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
