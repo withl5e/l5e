@@ -84,12 +84,31 @@ Read more in `docs/design-decisions.md`.
 
 ## Publishing
 
-Publish the packages from an authenticated npm session:
+Publish all workspace packages from an authenticated npm session. Scoped
+packages need `--access public` on first publish; pnpm reads each package's
+`publishConfig.access` field, so this can be set per-package once and then
+the workspace can be published in one command:
 
 ```sh
-pnpm --filter @withl5e/l5e publish --tag alpha
-pnpm --filter @withl5e/richtext-payload publish --tag alpha
-pnpm --filter create-l5e publish --tag alpha
+pnpm -r publish --tag alpha --no-git-checks
+```
+
+Or publish them one at a time in dependency order:
+
+```sh
+pnpm --filter @withl5e/l5e publish --tag alpha --access public --no-git-checks
+pnpm --filter @withl5e/richtext-payload publish --tag alpha --access public --no-git-checks
+pnpm --filter create-l5e publish --tag alpha --no-git-checks
+```
+
+If 2FA is enabled on the npm account, append `--otp=<code>` to each command.
+
+Verify on the registry:
+
+```sh
+npm view @withl5e/l5e
+npm view @withl5e/richtext-payload
+npm view create-l5e
 ```
 
 The create package must be named `create-l5e`; that is what lets users run

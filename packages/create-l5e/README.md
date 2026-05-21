@@ -33,7 +33,7 @@ The package name must be `create-l5e`. npm maps `npm create l5e` to the
 Publish the alpha:
 
 ```sh
-pnpm --filter create-l5e publish --tag alpha
+pnpm --filter create-l5e publish --tag alpha --no-git-checks
 ```
 
 After the package is stable, publish or move the dist tag to `latest` so users can run:
