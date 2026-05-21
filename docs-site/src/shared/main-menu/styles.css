@@ -17,6 +17,8 @@
   gap: 1.25rem;
   align-items: center;
   height: 100%;
+  max-width: var(--max-page);
+  margin: 0 auto;
   padding: 0 1.25rem;
 }
 

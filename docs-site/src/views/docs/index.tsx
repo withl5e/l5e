@@ -1,11 +1,13 @@
-import { Fragment, useCss } from '@withl5e/l5e/jsx-runtime';
+import { Fragment, useClientJs, useCss } from '@withl5e/l5e/jsx-runtime';
 
+import { Footer } from '~/shared/footer/Footer';
 import { MainMenu } from '~/shared/main-menu/MainMenu';
 
 import type { DocsPageProps } from './loader';
 
 export default function DocsPage({
   html,
+  toc,
   sourcePath,
   currentSlug,
   navGroups,
@@ -14,6 +16,7 @@ export default function DocsPage({
 }: DocsPageProps) {
   useCss('/src/views/docs/styles.css');
   useCss('/src/features/syntax-highlight/styles.css');
+  useClientJs('/src/views/docs/scrollspy.client.ts');
 
   const activeItem = navGroups.flatMap((g) => g.items).find((i) => i.slug === currentSlug);
   const activeLabel = activeItem ? `${activeItem.section} · ${activeItem.title}` : 'Menu';
@@ -81,7 +84,23 @@ export default function DocsPage({
             )}
           </nav>
         </main>
+
+        {toc.length > 0 ? (
+          <aside class="docs-toc" aria-label="On this page">
+            <p class="docs-toc__label">On this page</p>
+            <nav class="docs-toc__nav">
+              <ul>
+                {toc.map((item) => (
+                  <li class={item.depth === 3 ? 'docs-toc__item--sub' : undefined}>
+                    <a href={`#${item.id}`}>{item.text}</a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          </aside>
+        ) : null}
       </div>
+      <Footer />
     </Fragment>
   );
 }

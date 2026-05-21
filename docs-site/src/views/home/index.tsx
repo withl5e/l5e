@@ -1,5 +1,6 @@
 import { Fragment, useCss } from '@withl5e/l5e/jsx-runtime';
 
+import { Footer } from '~/shared/footer/Footer';
 import { MainMenu } from '~/shared/main-menu/MainMenu';
 
 const FIRST_DOC_HREF = '/docs/why-l5e';
@@ -275,18 +276,7 @@ export default function HomePage() {
         </section>
       </main>
 
-      <footer class="site-footer">
-        <span>L5E · MIT licensed · v0.1.1-alpha</span>
-        <span class="site-footer__links">
-          <a href={GITHUB_URL} rel="noreferrer">
-            GitHub
-          </a>
-          <a href="https://www.npmjs.com/package/@withl5e/l5e" rel="noreferrer">
-            npm
-          </a>
-          <a href={FIRST_DOC_HREF}>Docs</a>
-        </span>
-      </footer>
+      <Footer />
     </Fragment>
   );
 }

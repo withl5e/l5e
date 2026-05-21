@@ -16,9 +16,14 @@
   --shadow-md: 0 6px 24px rgba(15, 17, 21, 0.06);
   --radius: 8px;
   --radius-lg: 12px;
+  /* Body text column inside an article — keep narrow for reading. */
   --max-content: 720px;
-  --max-page: 1100px;
+  /* Outer page shell — main menu, docs layout, landing sections all sit inside
+     this width so the search bar in the top menu lines up with the content
+     column underneath. Wide enough for sidebar (260) + content + TOC (220). */
+  --max-page: 1320px;
   --sidebar-w: 260px;
+  --toc-w: 220px;
   --menu-h: 56px;
   --font-sans:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -47,6 +52,16 @@
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 html,

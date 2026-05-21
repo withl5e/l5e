@@ -2,7 +2,7 @@
 title: Nanostore & shared-state pitfalls
 description: Sharing state between islands and vanilla client scripts.
 section: Interactivity
-order: 20
+order: 21
 ---
 
 # Nanostore & shared-state pitfalls

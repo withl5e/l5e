@@ -1,7 +1,9 @@
 .docs-layout {
   display: grid;
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--toc-w);
   min-height: 100vh;
+  max-width: var(--max-page);
+  margin: 0 auto;
 }
 
 .docs-sidebar {
@@ -113,7 +115,9 @@
 .docs-main {
   padding: 2rem 3rem 4rem;
   max-width: calc(var(--max-content) + 6rem);
+  margin: 0 auto;
   min-width: 0;
+  width: 100%;
 }
 
 .docs-meta {
@@ -165,6 +169,40 @@
   height: auto;
 }
 
+/* Figures (used by markdown that embeds raw <figure class="figure"> HTML) */
+.docs-content .figure {
+  margin: 1.5rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.docs-content .figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.docs-content .figure figcaption {
+  padding: 0.55rem 0.85rem;
+  font-size: 0.8125rem;
+  color: var(--fg-muted);
+  background: var(--bg-muted);
+  border-top: 1px solid var(--border);
+}
+
+.docs-content .figure-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.875rem;
+  margin: 1.5rem 0;
+}
+
+.docs-content .figure-grid .figure {
+  margin: 0;
+}
+
 .docs-content h1 {
   font-size: 2rem;
   margin: 0 0 1rem;
@@ -185,6 +223,13 @@
 
 .docs-content p {
   margin: 0 0 1rem;
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  text-wrap: pretty;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .docs-content ul,
@@ -239,6 +284,117 @@
 
 .docs-pagination__link--next {
   text-align: right;
+}
+
+/* ===== On this page (right-side TOC) ===== */
+
+.docs-toc {
+  position: sticky;
+  top: var(--menu-h);
+  align-self: start;
+  height: calc(100vh - var(--menu-h));
+  padding: 2rem 1.25rem 2rem 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg-muted) 25%, transparent) transparent;
+}
+
+.docs-toc::-webkit-scrollbar {
+  width: 8px;
+}
+.docs-toc::-webkit-scrollbar-track {
+  background: transparent;
+}
+.docs-toc::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--fg-muted) 22%, transparent);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+.docs-toc::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--fg-muted) 45%, transparent);
+}
+
+.docs-toc__label {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.docs-toc__nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--border);
+}
+
+.docs-toc__nav li {
+  margin: 0;
+}
+
+.docs-toc__nav a {
+  display: block;
+  padding: 0.25rem 0 0.25rem 0.75rem;
+  margin-left: -1px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--fg-muted);
+  border-left: 1px solid transparent;
+  transition: color 80ms ease, border-color 80ms ease;
+}
+
+.docs-toc__nav a:hover {
+  color: var(--fg);
+  text-decoration: none;
+  border-left-color: var(--border-strong);
+}
+
+.docs-toc__nav a[aria-current='location'] {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 500;
+}
+
+.docs-toc__nav .docs-toc__item--sub a[aria-current='location'] {
+  color: var(--accent);
+}
+
+.docs-toc__nav .docs-toc__item--sub a {
+  padding-left: 1.5rem;
+  font-size: 0.75rem;
+  color: var(--fg-subtle);
+}
+
+.docs-toc__nav .docs-toc__item--sub a:hover {
+  color: var(--fg-muted);
+}
+
+/* When :target is set via #anchor, highlight the matching toc link */
+.docs-toc__nav a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Heading anchor scroll offset so anchored heads don't hide under the
+   sticky main menu */
+.docs-content h2,
+.docs-content h3 {
+  scroll-margin-top: calc(var(--menu-h) + 1rem);
+}
+
+/* Hide TOC on medium-narrow screens; main content takes the freed space. */
+@media (max-width: 1100px) {
+  .docs-layout {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  }
+  .docs-toc {
+    display: none;
+  }
 }
 
 @media (max-width: 800px) {

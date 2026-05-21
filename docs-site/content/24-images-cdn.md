@@ -2,7 +2,7 @@
 title: Images (CDN-driven)
 description: Defer image transforms to the CDN, not the framework.
 section: SEO
-order: 23
+order: 24
 ---
 
 # Images (CDN-driven)

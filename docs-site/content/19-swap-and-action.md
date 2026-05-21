@@ -2,7 +2,7 @@
 title: Swap + Action
 description: Server actions that return HTML fragments swapped into the DOM.
 section: Interactivity
-order: 18
+order: 19
 ---
 
 # Swap + Action

@@ -2,7 +2,7 @@
 title: Islands (React)
 description: Hydrate React components inside the server-rendered page.
 section: Interactivity
-order: 19
+order: 20
 ---
 
 # Islands (React)

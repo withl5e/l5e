@@ -2,7 +2,7 @@
 title: Fragment & Head
 description: Two runtime primitives for composing JSX trees and pushing into <head>.
 section: Component
-order: 13
+order: 14
 ---
 
 # Fragment & Head

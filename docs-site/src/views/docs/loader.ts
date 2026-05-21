@@ -9,25 +9,70 @@ import path from 'node:path';
 
 import { highlightCode } from '~/features/syntax-highlight/highlighter';
 
-// Marked v14: the renderer hook is sync, but `walkTokens` runs async and lets
-// us mutate the token's text/escaped flags before rendering. We do the Shiki
-// pass there, store the full <pre>...</pre> HTML on the token, and have the
-// renderer return that text as-is.
-const md = new Marked({
-  async: true,
-  gfm: true,
-  walkTokens: async (token: any) => {
-    if (token.type === 'code') {
-      token.text = await highlightCode(token.text, token.lang);
-      token.escaped = true;
-    }
-  },
-  renderer: {
-    code({ text }: any) {
-      return text;
+// Marked v14: the renderer hook is sync, but `walkTokens` runs async. We use
+// walkTokens for two passes per render:
+//   1. `code` tokens — run through Shiki, swap text to highlighted HTML, set
+//      escaped: true so the renderer emits it raw.
+//   2. `heading` tokens (h2/h3 only) — slugify the text into an id, attach it
+//      to the token, and push a TOC entry. The renderer then emits the id.
+// A fresh Marked instance is built per render so the TOC array stays scoped
+// to one request (no module-state cross-talk under concurrent loads).
+
+export interface TocItem {
+  depth: 2 | 3;
+  text: string;
+  id: string;
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[`*_~]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+async function renderMarkdown(body: string): Promise<{ html: string; toc: TocItem[] }> {
+  const toc: TocItem[] = [];
+  const usedIds = new Map<string, number>();
+
+  const md = new Marked({
+    async: true,
+    gfm: true,
+    walkTokens: async (token: any) => {
+      if (token.type === 'code') {
+        token.text = await highlightCode(token.text, token.lang);
+        token.escaped = true;
+        return;
+      }
+      if (token.type === 'heading' && (token.depth === 2 || token.depth === 3)) {
+        const baseId = slugify(token.text) || `section-${toc.length + 1}`;
+        const count = usedIds.get(baseId) ?? 0;
+        usedIds.set(baseId, count + 1);
+        const id = count === 0 ? baseId : `${baseId}-${count}`;
+        token.id = id;
+        toc.push({ depth: token.depth, text: token.text, id });
+      }
     },
-  } as any,
-});
+    renderer: {
+      code({ text }: any) {
+        return text;
+      },
+      heading(this: any, { tokens, depth, id }: any) {
+        const inline = this.parser.parseInline(tokens);
+        return id
+          ? `<h${depth} id="${id}">${inline}</h${depth}>\n`
+          : `<h${depth}>${inline}</h${depth}>\n`;
+      },
+    } as any,
+  });
+
+  const html = await md.parse(body);
+  return { html, toc };
+}
 
 interface Frontmatter {
   title?: string;
@@ -52,6 +97,7 @@ export interface DocsPageProps {
   title: string;
   description: string;
   html: string;
+  toc: TocItem[];
   sourcePath: string;
   currentSlug: string;
   navGroups: DocsNavGroup[];
@@ -83,13 +129,14 @@ export const loader: LoaderFunction = async (requestInfo) => {
   const currentDoc = docs[currentIndex];
   const markdown = await fs.readFile(currentDoc.filePath, 'utf-8');
   const { body } = parseFrontmatter(markdown);
-  const html = await md.parse(body);
+  const { html, toc } = await renderMarkdown(body);
 
   return {
     props: {
       title: currentDoc.title,
       description: currentDoc.description,
       html,
+      toc,
       sourcePath: currentDoc.sourcePath,
       currentSlug: currentDoc.slug,
       navGroups: groupDocs(docs),

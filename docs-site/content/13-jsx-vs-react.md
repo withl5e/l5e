@@ -2,7 +2,7 @@
 title: JSX (vs React)
 description: L5E's JSX runtime is server-only and HTML-native — same syntax, different rules.
 section: Component
-order: 12
+order: 13
 ---
 
 # JSX (vs React)

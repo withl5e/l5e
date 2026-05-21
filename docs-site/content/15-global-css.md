@@ -2,7 +2,7 @@
 title: Global CSS
 description: Stylesheets loaded on every page.
 section: Style & CSS
-order: 14
+order: 15
 ---
 
 # Global CSS

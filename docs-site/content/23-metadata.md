@@ -2,7 +2,7 @@
 title: Metadata
 description: title, description, OG, Twitter — emitted from the loader.
 section: SEO
-order: 22
+order: 23
 ---
 
 # Metadata
