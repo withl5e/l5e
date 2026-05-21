@@ -3,16 +3,19 @@ import { useRequest } from '@withl5e/l5e/jsx-runtime';
 import { SearchBox } from '~/features/search/SearchBox';
 import { formatStarCount } from '~/shared/github-stars';
 
+const FIRST_DOC_HREF = '/docs/why-l5e';
 const GITHUB_URL = 'https://github.com/withl5e/l5e';
 const GITHUB_STAR_URL = `${GITHUB_URL}/stargazers`;
 
 export function MainMenu() {
-  const { locals } = useRequest();
+  const { locals, view } = useRequest();
   const rawStars = locals.githubStars;
   const stars =
     typeof rawStars === 'number' && Number.isFinite(rawStars) ? rawStars : null;
   const starLabel = formatStarCount(stars);
   const hasStars = stars !== null;
+  // Hide the Docs link when the user is already inside the docs surface.
+  const showDocsLink = view !== 'docs';
 
   return (
     <header class="main-menu" role="banner">
@@ -29,7 +32,12 @@ export function MainMenu() {
           <SearchBox />
         </div>
 
-        <nav class="main-menu__actions" aria-label="External links">
+        <nav class="main-menu__actions" aria-label="Primary">
+          {showDocsLink ? (
+            <a class="main-menu__link main-menu__link--docs" href={FIRST_DOC_HREF}>
+              <span class="main-menu__link-label">Docs</span>
+            </a>
+          ) : null}
           <a
             class="main-menu__link"
             href={GITHUB_URL}

@@ -1,0 +1,33 @@
+node_modules
+**/node_modules
+**/dist
+**/.vite
+**/.turbo
+**/.pnpm-store
+**/.l5e-temp
+**/.temp-bundle
+**/.pack
+
+# Editor / OS
+.git
+.github
+.claude
+.idea
+.vscode
+*.log
+.DS_Store
+Thumbs.db
+
+# Tests / generated reports
+tests/e2e/playwright-report
+tests/e2e/test-results
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# Anything Docker-specific
+Dockerfile*
+.dockerignore
+docker-compose*.yml

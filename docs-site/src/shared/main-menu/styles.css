@@ -91,6 +91,12 @@
   text-decoration: none;
 }
 
+/* "Docs" entry is a primary nav link, no icon — keep its label visible on
+   narrow viewports where icon-only links collapse their text. */
+.main-menu__link--docs .main-menu__link-label {
+  display: inline;
+}
+
 /* GitHub-style "Star" pill — golden accent on the star, subtle bg */
 .main-menu__star {
   display: inline-flex;

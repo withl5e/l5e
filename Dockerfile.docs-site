@@ -1,0 +1,102 @@
+# Multi-stage Dockerfile for the docs-site app (./docs-site).
+# Built from the repo root because docs-site links to @withl5e/l5e via pnpm workspace.
+#
+# Build:  docker build -f Dockerfile.docs-site -t l5e-docs-site:latest .
+# Run:    docker run --rm -p 8080:8080 l5e-docs-site:latest
+
+# ===== Base =====
+FROM node:22-alpine AS base
+RUN corepack enable
+
+# ===== Stage 1: install dependencies =====
+# pnpm with --frozen-lockfile needs the topology of every workspace package
+# (from pnpm-workspace.yaml globs) to match the lockfile, so every workspace
+# package.json must be present even if its source isn't compiled here.
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+COPY pnpm-lock.yaml package.json pnpm-workspace.yaml tsconfig.base.json ./
+
+COPY packages/core/package.json ./packages/core/
+COPY packages/create-l5e/package.json ./packages/create-l5e/
+COPY packages/richtext-payload/package.json ./packages/richtext-payload/
+COPY examples/basic/package.json ./examples/basic/
+COPY tests/e2e/package.json ./tests/e2e/
+COPY docs-site/package.json ./docs-site/
+
+RUN pnpm install --frozen-lockfile
+
+# ===== Stage 2: build =====
+FROM base AS builder
+WORKDIR /app
+
+# Reuse pnpm-resolved node_modules from the deps stage.
+COPY --from=deps /app/node_modules ./node_modules
+
+# Workspace metadata.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+
+# Framework source — docs-site builds against @withl5e/l5e at workspace path.
+COPY packages/core ./packages/core
+
+# Other workspace packages: only the package.json files are needed for the
+# workspace topology check. Source isn't required to build docs-site.
+COPY packages/create-l5e/package.json ./packages/create-l5e/
+COPY packages/richtext-payload/package.json ./packages/richtext-payload/
+COPY examples/basic/package.json ./examples/basic/
+COPY tests/e2e/package.json ./tests/e2e/
+
+# docs-site source (content, public, src, server.ts, vite.config.js, etc).
+COPY docs-site ./docs-site
+
+# Re-run install so workspace symlinks resolve to the just-copied source.
+RUN pnpm install --frozen-lockfile --prefer-offline
+
+# Build framework first (docs-site depends on its dist output), then docs-site.
+RUN pnpm --filter @withl5e/l5e build && \
+    pnpm --filter l5e-docs-site build
+
+# ===== Stage 3: runtime =====
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=8080
+
+# Non-root user for the runtime.
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 docs
+
+# docs-site build artifacts + assets the server reads at request time.
+COPY --from=builder --chown=docs:nodejs /app/docs-site/dist        ./docs-site/dist
+COPY --from=builder --chown=docs:nodejs /app/docs-site/public      ./docs-site/public
+COPY --from=builder --chown=docs:nodejs /app/docs-site/index.html  ./docs-site/index.html
+COPY --from=builder --chown=docs:nodejs /app/docs-site/content     ./docs-site/content
+COPY --from=builder --chown=docs:nodejs /app/docs-site/package.json ./docs-site/package.json
+
+# Framework dist + package.json — required at runtime by the docs-site SSR
+# bundle (imports from @withl5e/l5e/...). Source is also kept because the
+# vite plugin generates types from it on demand.
+COPY --from=builder --chown=docs:nodejs /app/packages/core/dist        ./packages/core/dist
+COPY --from=builder --chown=docs:nodejs /app/packages/core/src         ./packages/core/src
+COPY --from=builder --chown=docs:nodejs /app/packages/core/package.json ./packages/core/package.json
+
+# node_modules (root + docs-site) — the runtime needs Express, sirv,
+# compression, marked, shiki, minisearch, etc.
+COPY --from=builder --chown=docs:nodejs /app/node_modules            ./node_modules
+COPY --from=builder --chown=docs:nodejs /app/docs-site/node_modules  ./docs-site/node_modules
+
+# Workspace marker files (pnpm reads these to resolve the workspace tree at runtime).
+COPY --from=builder --chown=docs:nodejs /app/package.json         ./package.json
+COPY --from=builder --chown=docs:nodejs /app/pnpm-workspace.yaml  ./pnpm-workspace.yaml
+
+# Trim devDependencies if any leaked into the production tree.
+RUN pnpm prune --production || true
+
+USER docs
+
+EXPOSE 8080
+
+WORKDIR /app/docs-site
+CMD ["node", "dist/server.js"]
