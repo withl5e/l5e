@@ -2,7 +2,7 @@
 title: Tooltip
 description: Hover/focus tooltips powered by Floating UI.
 section: Interactivity
-order: 15
+order: 17
 ---
 
 # Tooltip

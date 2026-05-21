@@ -12,7 +12,9 @@
   },
   "dependencies": {
     "@withl5e/l5e": "workspace:*",
-    "marked": "14.0.0"
+    "marked": "14.0.0",
+    "minisearch": "^7.2.0",
+    "shiki": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

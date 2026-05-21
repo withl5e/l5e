@@ -19,6 +19,7 @@
   --max-content: 720px;
   --max-page: 1100px;
   --sidebar-w: 260px;
+  --menu-h: 56px;
   --font-sans:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

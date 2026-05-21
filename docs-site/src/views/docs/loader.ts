@@ -3,9 +3,31 @@ import type {
   GenerateMetadataFunction,
   LoaderFunction,
 } from '@withl5e/l5e/entry-server';
-import { marked } from 'marked';
+import { Marked } from 'marked';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+
+import { highlightCode } from '~/features/syntax-highlight/highlighter';
+
+// Marked v14: the renderer hook is sync, but `walkTokens` runs async and lets
+// us mutate the token's text/escaped flags before rendering. We do the Shiki
+// pass there, store the full <pre>...</pre> HTML on the token, and have the
+// renderer return that text as-is.
+const md = new Marked({
+  async: true,
+  gfm: true,
+  walkTokens: async (token: any) => {
+    if (token.type === 'code') {
+      token.text = await highlightCode(token.text, token.lang);
+      token.escaped = true;
+    }
+  },
+  renderer: {
+    code({ text }: any) {
+      return text;
+    },
+  } as any,
+});
 
 interface Frontmatter {
   title?: string;
@@ -61,10 +83,7 @@ export const loader: LoaderFunction = async (requestInfo) => {
   const currentDoc = docs[currentIndex];
   const markdown = await fs.readFile(currentDoc.filePath, 'utf-8');
   const { body } = parseFrontmatter(markdown);
-  const html = await marked.parse(body, {
-    async: true,
-    gfm: true,
-  });
+  const html = await md.parse(body);
 
   return {
     props: {

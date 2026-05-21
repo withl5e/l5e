@@ -1,5 +1,7 @@
 import { Fragment, useCss } from '@withl5e/l5e/jsx-runtime';
 
+import { MainMenu } from '~/shared/main-menu/MainMenu';
+
 import type { DocsPageProps } from './loader';
 
 export default function DocsPage({
@@ -11,16 +13,29 @@ export default function DocsPage({
   next,
 }: DocsPageProps) {
   useCss('/src/views/docs/styles.css');
+  useCss('/src/features/syntax-highlight/styles.css');
+
+  const activeItem = navGroups.flatMap((g) => g.items).find((i) => i.slug === currentSlug);
+  const activeLabel = activeItem ? `${activeItem.section} · ${activeItem.title}` : 'Menu';
 
   return (
     <Fragment>
+      <MainMenu />
       <div class="docs-layout">
         <aside class="docs-sidebar" aria-label="L5E documentation">
-          <a class="docs-brand" href="/">
-            L5E
-            <span class="docs-brand__tag">docs</span>
-          </a>
-          <nav class="docs-nav">
+          <input
+            type="checkbox"
+            id="docs-menu-toggle"
+            class="docs-menu-toggle"
+            aria-hidden="true"
+          />
+          <label class="docs-menu-summary" for="docs-menu-toggle">
+            <span class="docs-menu-summary__label">{activeLabel}</span>
+            <span class="docs-menu-summary__chev" aria-hidden="true">
+              ▾
+            </span>
+          </label>
+          <nav class="docs-nav" aria-label="Documentation pages">
             {navGroups.map((group) => (
               <section class="docs-nav__group">
                 <h2>{group.section}</h2>

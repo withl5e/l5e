@@ -1,5 +1,7 @@
 import { Fragment, useCss } from '@withl5e/l5e/jsx-runtime';
 
+import { MainMenu } from '~/shared/main-menu/MainMenu';
+
 const FIRST_DOC_HREF = '/docs/why-l5e';
 const GITHUB_URL = 'https://github.com/withl5e/l5e';
 
@@ -53,21 +55,7 @@ export default function HomePage() {
 
   return (
     <Fragment>
-      <header class="site-header">
-        <a class="site-header__brand" href="/">
-          <span class="site-header__logo" aria-hidden="true">
-            ▲
-          </span>
-          L5E
-        </a>
-        <nav class="site-header__nav" aria-label="Primary">
-          <a href={FIRST_DOC_HREF}>Docs</a>
-          <a href={`${FIRST_DOC_HREF}#install`}>Install</a>
-          <a href={GITHUB_URL} rel="noreferrer">
-            GitHub
-          </a>
-        </nav>
-      </header>
+      <MainMenu />
 
       <main class="landing">
         <section class="hero" aria-labelledby="hero-title">

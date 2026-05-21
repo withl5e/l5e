@@ -1,0 +1,185 @@
+/* ===== Main menu (top bar) ===== */
+
+.main-menu {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--border);
+  height: var(--menu-h);
+}
+
+.main-menu__inner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1.25rem;
+  align-items: center;
+  height: 100%;
+  padding: 0 1.25rem;
+}
+
+.main-menu__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+
+.main-menu__brand:hover {
+  text-decoration: none;
+}
+
+.main-menu__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.75rem;
+  background: var(--fg);
+  color: var(--bg);
+  border-radius: 4px;
+}
+
+.main-menu__brand-tag {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--fg-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.main-menu__center {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.main-menu__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.main-menu__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--fg);
+  border-radius: 6px;
+  transition: background 80ms ease;
+}
+
+.main-menu__link:hover {
+  background: var(--bg-muted);
+  text-decoration: none;
+}
+
+/* GitHub-style "Star" pill — golden accent on the star, subtle bg */
+.main-menu__star {
+  display: inline-flex;
+  align-items: stretch;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 80ms ease, transform 80ms ease;
+  background: var(--bg-elevated);
+}
+
+.main-menu__star:hover {
+  text-decoration: none;
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.main-menu__star-icon {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.55rem;
+  color: #d4a017;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #facc15 22%, var(--bg-elevated)),
+    var(--bg-elevated)
+  );
+  border-right: 1px solid var(--border);
+}
+
+@media (prefers-color-scheme: dark) {
+  .main-menu__star-icon {
+    color: #fbbf24;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, #facc15 18%, var(--bg-elevated)),
+      var(--bg-elevated)
+    );
+  }
+}
+
+.main-menu__star-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.6rem;
+}
+
+.main-menu__star-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.6rem;
+  color: var(--fg-muted);
+  background: var(--bg-muted);
+  border-left: 1px solid var(--border);
+}
+
+/* ===== Responsive ===== */
+
+@media (max-width: 720px) {
+  .main-menu__inner {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    padding: 0 0.875rem;
+  }
+  .main-menu__brand-tag {
+    display: none;
+  }
+  .main-menu__link-label {
+    display: none;
+  }
+  .main-menu__link {
+    padding: 0.4rem 0.55rem;
+  }
+  .main-menu__star-count {
+    display: none;
+  }
+  .main-menu__star-label {
+    padding: 0.4rem 0.6rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-menu__inner {
+    gap: 0.5rem;
+  }
+  .main-menu__brand-text {
+    /* show only logo + tag-less; brand text hidden on tiny screens */
+    display: none;
+  }
+}

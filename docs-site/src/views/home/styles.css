@@ -1,64 +1,6 @@
 /* Landing page — Cloudflare/GitHub dev aesthetic.
    Mono-leaning typography, terminal blocks, side-by-side diff. */
 
-.site-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.875rem 1.5rem;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: saturate(180%) blur(14px);
-  -webkit-backdrop-filter: saturate(180%) blur(14px);
-  border-bottom: 1px solid var(--border);
-}
-
-.site-header__brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 700;
-  font-size: 1rem;
-  letter-spacing: -0.01em;
-  color: var(--fg);
-  font-family: var(--font-mono);
-}
-
-.site-header__logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  font-size: 0.75rem;
-  background: var(--fg);
-  color: var(--bg);
-  border-radius: 4px;
-}
-
-.site-header__brand:hover {
-  text-decoration: none;
-}
-
-.site-header__nav {
-  display: flex;
-  gap: 1.5rem;
-  font-family: var(--font-mono);
-  font-size: 0.8125rem;
-}
-
-.site-header__nav a {
-  color: var(--fg-muted);
-  font-weight: 500;
-}
-
-.site-header__nav a:hover {
-  color: var(--fg);
-  text-decoration: none;
-}
-
 .landing {
   max-width: var(--max-page);
   margin: 0 auto;
@@ -724,7 +666,7 @@
 
 .features__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: 1px;
   background: var(--border);
   border: 1px solid var(--border);
@@ -852,22 +794,71 @@
 
 @media (max-width: 640px) {
   .landing {
-    padding: 0 1.25rem 4rem;
+    padding: 0 1rem 4rem;
   }
   .hero {
     padding: 2.5rem 0 3rem;
   }
+  .hero__title {
+    font-size: clamp(2rem, 7vw, 2.5rem);
+  }
+  .hero__lead {
+    font-size: 1rem;
+  }
+  .hero__cta .btn {
+    flex: 1 1 calc(50% - 0.625rem);
+    justify-content: center;
+  }
   .viz {
     padding: 3.5rem 0;
+  }
+  .viz__heading {
+    margin-bottom: 2rem;
+  }
+  .viz__heading h2 {
+    font-size: clamp(1.5rem, 6.5vw, 2rem);
   }
   .features {
     padding: 3.5rem 0;
   }
+  .section-title {
+    margin-bottom: 1.25rem;
+  }
   .cta-strip {
-    padding: 2.5rem 1.25rem;
+    padding: 2.5rem 1rem;
     margin-top: 3.5rem;
+  }
+  .cta-strip__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    width: 100%;
+  }
+  .cta-strip__actions .btn {
+    justify-content: center;
   }
   .terminal {
     font-size: 0.75rem;
+  }
+  .hero__snippet {
+    font-size: 0.8125rem;
+    padding: 0.75rem 0.875rem;
+  }
+  .site-footer {
+    padding: 1.25rem 1rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .terminal {
+    font-size: 0.7rem;
+    line-height: 1.55;
+  }
+  .terminal__body {
+    padding: 0.75rem 0.875rem 1rem;
+  }
+  .hero__pill {
+    font-size: 0.6875rem;
   }
 }

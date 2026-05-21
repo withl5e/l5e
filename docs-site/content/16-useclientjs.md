@@ -2,7 +2,7 @@
 title: useClientJs (vanilla)
 description: Ship a plain-TS client script for a view.
 section: Interactivity
-order: 14
+order: 16
 ---
 
 # useClientJs (vanilla)

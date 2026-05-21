@@ -1,6 +1,6 @@
 .docs-layout {
   display: grid;
-  grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -9,28 +9,61 @@
   padding: 1.5rem 1rem;
   background: var(--bg-muted);
   position: sticky;
-  top: 0;
+  top: var(--menu-h);
   align-self: start;
-  height: 100vh;
+  height: calc(100vh - var(--menu-h));
   overflow-y: auto;
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg-muted) 30%, transparent) transparent;
+  scrollbar-gutter: stable;
 }
 
-.docs-brand {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  font-weight: 700;
-  font-size: 1.25rem;
-  color: var(--fg);
-  margin-bottom: 1.5rem;
+/* WebKit / Blink: thin, subtle, animated on hover */
+.docs-sidebar::-webkit-scrollbar {
+  width: 10px;
+}
+.docs-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.docs-sidebar::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--fg-muted) 24%, transparent);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  transition: background-color 120ms ease;
+}
+.docs-sidebar:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--fg-muted) 45%, transparent);
+}
+.docs-sidebar::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--fg-muted) 65%, transparent);
+}
+.docs-sidebar::-webkit-scrollbar-thumb:active {
+  background-color: var(--accent);
 }
 
-.docs-brand__tag {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--fg-muted);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+/* CSS-only collapsible (checkbox + label pattern).
+   Avoids Chrome's <details> shadow-DOM slot, which hides children
+   even with author-level display overrides. The checkbox is visually
+   hidden; the label is the actual button on mobile; the nav is a
+   plain sibling, so its display is fully controllable from CSS. */
+
+.docs-menu-toggle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+  white-space: nowrap;
+}
+
+.docs-menu-summary {
+  /* hidden on desktop; mobile media-query re-enables */
+  display: none;
 }
 
 .docs-nav {
@@ -80,6 +113,7 @@
 .docs-main {
   padding: 2rem 3rem 4rem;
   max-width: calc(var(--max-content) + 6rem);
+  min-width: 0;
 }
 
 .docs-meta {
@@ -89,10 +123,46 @@
   font-size: 0.8125rem;
   color: var(--fg-muted);
   margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 
 .docs-meta code {
   font-size: 0.75rem;
+  word-break: break-all;
+}
+
+.docs-content {
+  min-width: 0;
+}
+
+.docs-content pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.docs-content table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.docs-content th,
+.docs-content td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.docs-content th {
+  background: var(--bg-muted);
+  font-weight: 600;
+}
+
+.docs-content img {
+  max-width: 100%;
+  height: auto;
 }
 
 .docs-content h1 {
@@ -176,15 +246,80 @@
     grid-template-columns: 1fr;
   }
   .docs-sidebar {
-    position: static;
+    position: sticky;
+    top: var(--menu-h);
+    z-index: 5;
     height: auto;
+    padding: 0.75rem 1rem;
     border-right: none;
     border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg-muted) 92%, transparent);
+    backdrop-filter: saturate(180%) blur(10px);
+    -webkit-backdrop-filter: saturate(180%) blur(10px);
+    display: block;
+  }
+  .docs-menu-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.625rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--fg);
+    cursor: pointer;
+    user-select: none;
+  }
+  .docs-menu-summary__label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .docs-menu-summary__chev {
+    color: var(--fg-muted);
+    font-size: 0.75rem;
+    margin-left: 0.5rem;
+    transition: transform 150ms ease;
+  }
+  .docs-menu-toggle:checked ~ .docs-menu-summary .docs-menu-summary__chev {
+    transform: rotate(180deg);
+  }
+  .docs-menu-toggle:focus-visible ~ .docs-menu-summary {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .docs-menu-toggle:not(:checked) ~ .docs-nav {
+    display: none;
+  }
+  .docs-menu-toggle:checked ~ .docs-nav {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    max-height: 60vh;
+    overflow-y: auto;
   }
   .docs-main {
     padding: 1.5rem 1rem 3rem;
   }
   .docs-pagination {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .docs-main {
+    padding: 1.25rem 0.875rem 2.5rem;
+  }
+  .docs-content h1 {
+    font-size: 1.625rem;
+  }
+  .docs-content h2 {
+    font-size: 1.25rem;
+    margin-top: 2rem;
   }
 }

@@ -2,7 +2,7 @@
 title: Cache Tags (component + loader)
 description: Tag responses for granular CDN purging.
 section: SEO
-order: 22
+order: 24
 ---
 
 # Cache Tags (component + loader)
