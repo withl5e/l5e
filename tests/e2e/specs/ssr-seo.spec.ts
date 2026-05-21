@@ -24,4 +24,14 @@ test.describe('SSR + SEO meta', () => {
       /Rendered at\s*\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/,
     );
   });
+
+  test('GET /actions ships title from view loader.generateMetadata', async ({ request }) => {
+    const response = await request.get('/actions');
+    expect(response.status()).toBe(200);
+
+    const html = await response.text();
+    expect(html).toContain('<title>Action + swap example</title>');
+    expect(html).toContain('<h1>Action + swap</h1>');
+    expect(html).toContain('data-swap-target="server-time"');
+  });
 });

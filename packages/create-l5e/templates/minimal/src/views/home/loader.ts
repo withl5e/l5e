@@ -1,4 +1,8 @@
-import type { LoaderFunction, LoaderResult } from '@withl5e/l5e/entry-server';
+import type {
+  GenerateMetadataFunction,
+  LoaderFunction,
+  LoaderResult,
+} from '@withl5e/l5e/entry-server';
 
 export type HomeLoaderData = {
   now: string;
@@ -15,3 +19,8 @@ export const loader: LoaderFunction = async (): Promise<LoaderResult> => {
     cacheTags: ['home'],
   };
 };
+
+export const generateMetadata: GenerateMetadataFunction = () => ({
+  title: 'L5E starter',
+  description: 'A minimal L5E app.',
+});

@@ -1,0 +1,95 @@
+:root {
+  --bg: #ffffff;
+  --bg-muted: #f6f7f9;
+  --bg-elevated: #ffffff;
+  --fg: #1f2328;
+  --fg-muted: #57606a;
+  --fg-subtle: #6e7781;
+  --accent: #0969da;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(9, 105, 218, 0.08);
+  --border: #d0d7de;
+  --border-strong: #afb8c1;
+  --code-bg: #f0f2f4;
+  --code-fg: #1f2328;
+  --shadow-sm: 0 1px 2px rgba(15, 17, 21, 0.04);
+  --shadow-md: 0 6px 24px rgba(15, 17, 21, 0.06);
+  --radius: 8px;
+  --radius-lg: 12px;
+  --max-content: 720px;
+  --max-page: 1100px;
+  --sidebar-w: 260px;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-muted: #161b22;
+    --bg-elevated: #161b22;
+    --fg: #e6edf3;
+    --fg-muted: #8b949e;
+    --fg-subtle: #6e7681;
+    --accent: #58a6ff;
+    --accent-fg: #0d1117;
+    --accent-soft: rgba(88, 166, 255, 0.12);
+    --border: #30363d;
+    --border-strong: #484f58;
+    --code-bg: #1c2128;
+    --code-fg: #e6edf3;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.35);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 1rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  line-height: 1.5;
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.875rem;
+}

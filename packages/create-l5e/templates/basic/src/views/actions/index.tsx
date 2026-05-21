@@ -1,13 +1,11 @@
 import { Fragment, useClientJs, useCss } from '@withl5e/l5e/jsx-runtime';
-import { MetadataRenderer } from '@withl5e/l5e/seo';
 
 export default function ActionsPage() {
   useCss('./actions.css');
   useClientJs('./client.ts');
 
   return (
-    <>
-      <MetadataRenderer metadata={{ title: 'Action + swap example' }} />
+    <Fragment>
       <nav class="nav" aria-label="Primary">
         <a href="/">Home</a>
         <a href="/rewrite-demo">Rewrite demo</a>
@@ -27,6 +25,6 @@ export default function ActionsPage() {
           </p>
         </section>
       </main>
-    </>
+    </Fragment>
   );
 }

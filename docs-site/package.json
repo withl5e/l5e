@@ -1,0 +1,24 @@
+{
+  "name": "l5e-docs-site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build && vite build --ssr src/entry-server.ts --outDir dist/server && vite build --ssr server.ts --outDir dist --emptyOutDir false",
+    "start": "cross-env NODE_ENV=production node dist/server.js",
+    "preview": "npm run build && npm run start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@withl5e/l5e": "workspace:*",
+    "marked": "14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "cross-env": "^7.0.3",
+    "tsx": "^4.7.0",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.5"
+  }
+}
