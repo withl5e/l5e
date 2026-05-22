@@ -4,7 +4,14 @@
 .landing {
   max-width: var(--max-page);
   margin: 0 auto;
-  padding: 0 1.5rem 6rem;
+  /* Inline padding scales to the device's safe-area inset on phones with a
+     notch / Dynamic Island so content doesn't slide under the rounded
+     corners. max() falls back to 1.5rem on devices without the inset. */
+  padding:
+    0
+    max(1.5rem, env(safe-area-inset-right))
+    6rem
+    max(1.5rem, env(safe-area-inset-left));
 }
 
 .section-title {
@@ -74,6 +81,15 @@
   50% {
     opacity: 0.5;
   }
+}
+
+.hero__copy {
+  /* Grid items default to min-width: auto (≈ min-content of children). The
+     hero__snippet is a <pre> whose min-content is the full command; that
+     would push the column wider than the viewport on phones. Explicit
+     min-width: 0 keeps the column sized by the grid track, not the
+     longest child. */
+  min-width: 0;
 }
 
 .hero__title {
@@ -157,8 +173,14 @@
   font-family: var(--font-mono);
   font-size: 0.875rem;
   color: var(--fg);
+  /* pre-wrap (instead of pre) lets the install command wrap at spaces on
+     narrow viewports. On desktop the column is wide enough that the command
+     stays on one line; on mobile it wraps neatly instead of forcing the
+     hero column to expand past the viewport edge. */
+  white-space: pre-wrap;
+  word-break: break-word;
   overflow-x: auto;
-  white-space: pre;
+  max-width: 100%;
 }
 
 .hero__snippet-prompt {
@@ -752,7 +774,7 @@
 
 @media (max-width: 960px) {
   .hero {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 2.5rem;
     padding: 3rem 0 4rem;
   }
@@ -766,7 +788,11 @@
 
 @media (max-width: 640px) {
   .landing {
-    padding: 0 1rem 4rem;
+    padding:
+      0
+      max(1rem, env(safe-area-inset-right))
+      4rem
+      max(1rem, env(safe-area-inset-left));
   }
   .hero {
     padding: 2.5rem 0 3rem;
@@ -818,15 +844,106 @@
   }
 }
 
-@media (max-width: 380px) {
+/* iPhone Pro class (~402px) and smaller phones: stack CTAs full-width,
+   tighter typography, larger tap targets (Apple HIG ≥44px). */
+@media (max-width: 480px) {
+  .landing {
+    padding:
+      0
+      max(0.875rem, env(safe-area-inset-right))
+      3.5rem
+      max(0.875rem, env(safe-area-inset-left));
+  }
+  .hero {
+    padding: 2rem 0 2.5rem;
+    gap: 2rem;
+  }
+  .hero__pill {
+    font-size: 0.6875rem;
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .hero__title {
+    font-size: clamp(1.75rem, 8.5vw, 2.25rem);
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+  }
+  .hero__lead {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
+  /* Stack the hero CTA buttons full-width — better tap targets on phones */
+  .hero__cta {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .hero__cta .btn {
+    flex: 1 1 100%;
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+  .hero__snippet {
+    font-size: 0.75rem;
+    padding: 0.625rem 0.75rem;
+  }
   .terminal {
     font-size: 0.7rem;
-    line-height: 1.55;
+    line-height: 1.6;
+  }
+  .terminal__bar {
+    padding: 0.5rem 0.75rem;
+    gap: 0.3rem;
   }
   .terminal__body {
     padding: 0.75rem 0.875rem 1rem;
   }
-  .hero__pill {
+  .terminal__file {
     font-size: 0.6875rem;
+  }
+  .viz {
+    padding: 2.5rem 0;
+  }
+  .viz__heading h2 {
+    font-size: clamp(1.375rem, 7vw, 1.75rem);
+  }
+  .viz-stage {
+    min-height: 150px;
+    padding: 0.75rem 0.5rem;
+  }
+  .viz-bundle {
+    max-width: 180px;
+  }
+  .features {
+    padding: 2.5rem 0;
+  }
+  .feature {
+    padding: 1.125rem;
+  }
+  .cta-strip {
+    padding: 2rem 1rem;
+    margin-top: 2.5rem;
+  }
+  .cta-strip h2 {
+    font-size: clamp(1.375rem, 6vw, 1.75rem);
+  }
+  .cta-strip p {
+    font-size: 0.9375rem;
+  }
+  .cta-strip__actions .btn {
+    min-height: 44px;
+  }
+}
+
+/* Very narrow / older phones — keep readable, no layout breakage */
+@media (max-width: 380px) {
+  .terminal {
+    font-size: 0.65rem;
+  }
+  .terminal__body {
+    padding: 0.625rem 0.75rem 0.875rem;
+  }
+  .hero__pill {
+    font-size: 0.625rem;
   }
 }

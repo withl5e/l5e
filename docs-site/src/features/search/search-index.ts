@@ -8,7 +8,6 @@ interface DocRecord {
   title: string;
   section: string;
   body: string;
-  snippet: string;
   order: number;
 }
 
@@ -31,7 +30,10 @@ async function buildIndex(): Promise<MiniSearch<DocRecord>> {
 
   const index = new MiniSearch<DocRecord>({
     fields: ['title', 'body', 'section'],
-    storeFields: ['slug', 'title', 'section', 'snippet'],
+    // We store the full body (plain text) so runSearch can build a contextual
+    // snippet around the matched term per hit. Bodies are small (1–3 KB each
+    // after stripping markdown), so the in-memory footprint stays trivial.
+    storeFields: ['slug', 'title', 'section', 'body'],
     searchOptions: {
       prefix: true,
       fuzzy: 0.2,
@@ -64,7 +66,6 @@ async function loadAllDocs(): Promise<DocRecord[]> {
         title,
         section,
         body: plainBody,
-        snippet: makeSnippet(plainBody, 200),
         order: frontmatter.order ?? Number.MAX_SAFE_INTEGER,
       };
     }),

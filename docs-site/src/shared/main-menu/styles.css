@@ -118,43 +118,34 @@
   transform: translateY(-1px);
 }
 
+/* First segment of the merged pill — GitHub mark on a neutral background. */
 .main-menu__star-icon {
   display: inline-flex;
   align-items: center;
   padding: 0 0.55rem;
-  color: #d4a017;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, #facc15 22%, var(--bg-elevated)),
-    var(--bg-elevated)
-  );
+  color: var(--fg);
+  background: var(--bg-muted);
   border-right: 1px solid var(--border);
 }
 
+.main-menu__star-glyph {
+  color: #d4a017;
+  flex-shrink: 0;
+}
+
 @media (prefers-color-scheme: dark) {
-  .main-menu__star-icon {
+  .main-menu__star-glyph {
     color: #fbbf24;
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, #facc15 18%, var(--bg-elevated)),
-      var(--bg-elevated)
-    );
   }
 }
 
-.main-menu__star-label {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.45rem 0.6rem;
-}
-
+/* Right segment — ★ glyph + numeric star count. */
 .main-menu__star-count {
   display: inline-flex;
   align-items: center;
-  padding: 0.45rem 0.6rem;
-  color: var(--fg-muted);
-  background: var(--bg-muted);
-  border-left: 1px solid var(--border);
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem;
+  color: var(--fg);
 }
 
 /* ===== Responsive ===== */
@@ -175,9 +166,6 @@
     padding: 0.4rem 0.55rem;
   }
   .main-menu__star-count {
-    display: none;
-  }
-  .main-menu__star-label {
     padding: 0.4rem 0.6rem;
   }
 }

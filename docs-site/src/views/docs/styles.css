@@ -232,6 +232,15 @@
   overflow-wrap: break-word;
 }
 
+/* Narrow viewports — drop justify (it produces ugly word-spacing gaps
+   in short lines) and fall back to left-aligned reading. Hyphens stay
+   on for long-word wrapping. */
+@media (max-width: 640px) {
+  .docs-content p {
+    text-align: left;
+  }
+}
+
 .docs-content ul,
 .docs-content ol {
   padding-left: 1.5rem;

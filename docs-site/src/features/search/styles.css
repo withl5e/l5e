@@ -254,18 +254,38 @@
   overflow: hidden;
 }
 
+/* Highlighted matched terms inside the snippet. <mark> default is yellow bg,
+   override to use the accent palette so it blends with the rest of the UI. */
+.search-hit__mark {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+  padding: 0 0.1em;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
+.search-hit__link:hover .search-hit__mark,
+.search-hit__link:focus-visible .search-hit__mark {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
 /* ===== Responsive ===== */
 
 @media (max-width: 800px) {
   .search-box__kbd {
     display: none;
   }
+  /* Break out of the cramped menu-middle column on mobile — fix the dropdown
+     to the viewport so it spans full screen width below the sticky menu,
+     not just the width of the input. */
   .search-box__results {
-    /* keep dropdown anchored under the input, full-width inside the menu row */
-    left: 0;
-    right: 0;
+    position: fixed;
+    top: calc(var(--menu-h) + 0.4rem);
+    left: max(0.5rem, env(safe-area-inset-left));
+    right: max(0.5rem, env(safe-area-inset-right));
     transform: none;
-    width: 100%;
+    width: auto;
+    z-index: 60;
   }
   .search-panel {
     max-height: min(75vh, 540px);

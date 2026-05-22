@@ -1,13 +1,13 @@
 import { Fragment } from '@withl5e/l5e/jsx-runtime';
 
-import type { SearchHit } from './types';
+import type { DisplayHit } from './types';
 
 export type SearchResultsStatus = 'idle' | 'empty' | 'ok';
 
 export interface SearchResultsProps {
   status: SearchResultsStatus;
   query: string;
-  hits: SearchHit[];
+  hits: DisplayHit[];
 }
 
 export function SearchResults({ status, query, hits }: SearchResultsProps) {
@@ -40,8 +40,16 @@ export function SearchResults({ status, query, hits }: SearchResultsProps) {
             <a class="search-hit__link" href={`/docs/${hit.slug}`}>
               <span class="search-hit__section">{hit.section}</span>
               <span class="search-hit__title">{hit.title}</span>
-              {hit.snippet ? (
-                <span class="search-hit__snippet">{hit.snippet}…</span>
+              {hit.parts.length > 0 ? (
+                <span class="search-hit__snippet">
+                  {hit.parts.map((part) =>
+                    part.highlight ? (
+                      <mark class="search-hit__mark">{part.text}</mark>
+                    ) : (
+                      part.text
+                    ),
+                  )}
+                </span>
               ) : null}
             </a>
           </li>
