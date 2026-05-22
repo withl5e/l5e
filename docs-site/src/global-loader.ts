@@ -24,8 +24,9 @@ export const loader: LoaderFunction = async (requestInfo): Promise<LoaderResult>
 
 /**
  * Skip the global loader for endpoints that don't ship the main menu —
- * keeps responses for action/sitemap/robots endpoints lean.
+ * keeps responses for action/sitemap/robots endpoints lean (no GitHub
+ * star fetch, no locals plumbing).
  */
 export function shouldIgnore(viewName: string): boolean {
-  return false;
+  return viewName === 'sitemap';
 }
