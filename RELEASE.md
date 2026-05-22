@@ -6,8 +6,9 @@ two automated flows:
 1. **Publish to npm** — three packages go out under their matching
    dist-tag (`alpha`, `beta`, `next`, or `latest`).
 2. **Build & deploy the docs site** — Docker image is pushed to the
-   GitLab Container Registry and rolled onto the Docker Swarm running
-   on the docs VPS.
+   GitHub Container Registry (ghcr.io), the Swarm service `l5e_docs`
+   is rolled onto the new image, and the Cloudflare cache tag `global`
+   is purged.
 
 Both flows are gated by a `test` job that mirrors `ci.yml` — neither
 publish nor deploy happens if `pnpm build / test / typecheck` fails.
@@ -147,17 +148,25 @@ If any step fails, neither `publish-npm` nor `deploy-docker` runs.
 
 ### `deploy-docker`
 
-1. `docker buildx` builds `Dockerfile.docs-site` from the repo root.
-2. Push two tags to `registry.gitlab.com/ducmaster-group/l5e`:
+1. `docker buildx` builds [`docs-site/Dockerfile`](./docs-site/Dockerfile)
+   from the repo root.
+2. Push two tags to `ghcr.io/<owner>/<repo>` (lowercase):
    - `:<version>` (e.g. `0.1.2-alpha.0`)
    - `:latest`
-3. SSH into the swarm manager and run `~/deploy-l5e.sh`, which does a
-   rolling `docker service update --force` on the `l5e-docs` service.
 
-The deploy script lives in this repo at
-[`scripts/deploy-l5e.sh`](./scripts/deploy-l5e.sh) as a versioned
-reference. The copy on the VPS is updated manually by `scp` when the
-script changes — the workflow does not re-upload it on each run.
+   Auth uses the auto-provided `GITHUB_TOKEN`; the job declares
+   `permissions: packages: write` to enable it.
+3. SSH into the Swarm manager and run a single
+   `docker service update --image <version-tag> --with-registry-auth
+   --force l5e_docs` — Swarm rolls the running tasks with `start-first`,
+   rolling back automatically if the new task fails to come up.
+4. POST to Cloudflare `purge_cache` with `{"tags":["global"]}` so
+   edge caches re-fetch the new docs immediately.
+
+The stack definition lives at
+[`docs-site/docker-compose.yml`](./docs-site/docker-compose.yml) and is
+used for the one-time bootstrap only — the workflow doesn't re-apply
+it on each release.
 
 ## Required GitHub secrets
 
@@ -166,38 +175,64 @@ Configure under **Settings → Secrets and variables → Actions**.
 | Name | Used by | How to get it |
 |---|---|---|
 | `NPM_TOKEN` | `publish-npm` | npmjs.com → Access Tokens → granular automation token, publish scope on `@withl5e/*` and `create-l5e` |
-| `GITLAB_REGISTRY_USER` | `deploy-docker` | GitLab Deploy Token username |
-| `GITLAB_REGISTRY_TOKEN` | `deploy-docker` | GitLab Deploy Token with `read_registry` + `write_registry` |
-| `VPS_HOST` | `deploy-docker` | Public IP / domain of the swarm manager |
+| `VPS_HOST` | `deploy-docker` | Public IP / domain of the Swarm manager |
 | `VPS_USER` | `deploy-docker` | SSH user on the manager |
 | `VPS_SSH_KEY` | `deploy-docker` | Private key (PEM block) whose public half lives in the manager's `~/.ssh/authorized_keys` |
 | `VPS_PORT` *(optional)* | `deploy-docker` | SSH port if not `22` |
+| `CF_ZONE_ID` | `deploy-docker` | Cloudflare Zone ID (Cloudflare dashboard → zone → Overview, right sidebar) |
+| `CF_TOKEN` | `deploy-docker` | Cloudflare API token with `Zone.Cache Purge` permission, scoped to that zone |
 
-## One-time setup on the swarm manager
+> **ghcr.io auth** uses the auto-provided `GITHUB_TOKEN` — no manual
+> secret needed. The Swarm manager needs its own `docker login ghcr.io`
+> (see below) so it can pull the image.
 
-Before the first `deploy-docker` run, bootstrap the service manually on
-the swarm:
+## One-time setup on the Swarm manager
+
+Before the first `deploy-docker` run, initialize Swarm (if not already)
+and deploy the stack from the committed compose file:
 
 ```sh
-# Log in so the manager has registry credentials to push down to workers.
-docker login registry.gitlab.com
+# 1. Init swarm if this node isn't a manager yet.
+docker swarm init   # or --advertise-addr <vps-ip> if it asks
 
-# Create the service. After this, the deploy script just rolls it.
-docker service create \
-  --name l5e-docs \
-  --replicas 1 \
-  --publish published=8180,target=8080 \
-  --restart-condition any \
-  --update-parallelism 1 \
-  --update-order start-first \
-  --update-failure-action rollback \
-  --with-registry-auth \
-  registry.gitlab.com/ducmaster-group/l5e:latest
+# 2. Create a classic PAT (https://github.com/settings/tokens) with the
+#    `read:packages` scope. Then log in so the manager (and any worker
+#    nodes via --with-registry-auth) can pull from ghcr.io.
+echo <PAT> | docker login ghcr.io -u <github-username> --password-stdin
+
+# 3. Copy the compose file (one time, or whenever it changes).
+scp docs-site/docker-compose.yml <user>@<vps>:~/l5e-docs.yml
+
+# 4. Deploy the stack. Stack name `l5e` + service key `docs` →
+#    Swarm service `l5e_docs` (the name the workflow updates).
+ssh <user>@<vps> "docker stack deploy -c ~/l5e-docs.yml l5e --with-registry-auth"
 ```
 
-After bootstrap, the deploy script (`scripts/deploy-l5e.sh`) takes
-over: it pulls the latest image, then `docker service update --force`
-rolls the running tasks.
+> If the docs image is **public** on ghcr.io (recommended for open
+> source docs), step 2 is optional — workers can pull without auth.
+> Publish visibility once after the first push: GitHub → your profile
+> → Packages → `l5e` → Package settings → Change visibility → Public.
+
+After bootstrap, the release workflow just runs
+`docker service update --image … --with-registry-auth --force l5e_docs`
+on each tag — no need to re-deploy the stack unless the compose file
+itself changes (ports, healthcheck, resource limits, etc).
+
+## Cloudflare cache-tag setup
+
+The release workflow purges `{"tags":["global"]}` on every deploy. For
+that to do anything, every docs response served through Cloudflare
+must carry the `Cache-Tag: global` header. Either:
+
+- Set the header from the docs-site server (a middleware that adds it
+  to every response), **or**
+- Add a Cloudflare Transform Rule that injects `Cache-Tag: global`
+  on responses for the docs hostname.
+
+Without the header, the purge call returns 200 but has no effect.
+Tag-based purge requires a Cloudflare Pro / Business / Enterprise
+plan — on the Free plan, swap the workflow body to
+`{"purge_everything": true}`.
 
 ## Troubleshooting
 
@@ -252,11 +287,10 @@ prerelease` will pick the next prerelease counter cleanly.
   public key.
 - If using a non-default SSH port, set the `VPS_PORT` secret.
 
-### `service "l5e-docs" does not exist yet on this swarm`
+### `service "l5e_docs" not found` in the SSH step
 
-You skipped the one-time setup above. Run the `docker service create
-…` block on the manager, then re-trigger the workflow (push a new tag,
-or re-run the failed job from the Actions UI).
+The stack wasn't bootstrapped yet. Run the `docker stack deploy …`
+block in "One-time setup" once, then re-run the failed job.
 
 ## Out of scope (for now)
 
@@ -267,7 +301,10 @@ or re-run the failed job from the Actions UI).
 - **Rollback automation**. To roll back manually:
   ```sh
   ssh user@vps
-  docker service update --rollback l5e-docs
+  docker service update --rollback l5e_docs
+  # or pin to a specific older tag:
+  docker service update --image ghcr.io/withl5e/l5e:0.1.1-alpha.2 \
+    --with-registry-auth --force l5e_docs
   ```
 - **Release notifications** (Slack, Discord). Add later if the team
   wants noisier feedback than the GitHub Actions email.

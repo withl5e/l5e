@@ -6,19 +6,23 @@
 #   publish-npm   — needs: test. Verifies the tag's version matches
 #                   packages/core/package.json, derives an npm dist-tag from
 #                   the prerelease suffix, and runs `pnpm -r publish`.
-#   deploy-docker — needs: test. Builds Dockerfile.docs-site, pushes to
-#                   GitLab Container Registry, then SSHs into the VPS and
-#                   runs ~/deploy-l5e.sh.
+#   deploy-docker — needs: test. Builds docs-site/Dockerfile, pushes to
+#                   GitHub Container Registry (ghcr.io), rolls the Swarm
+#                   service `l5e_docs` via `docker service update`, then
+#                   purges the Cloudflare `global` cache tag.
 #
 # Required secrets (GitHub repo → Settings → Secrets and variables → Actions):
 #
 #   NPM_TOKEN              npm.com automation token, publish scope on @withl5e/*
-#   GITLAB_REGISTRY_USER   GitLab Deploy Token username (or PAT username)
-#   GITLAB_REGISTRY_TOKEN  GitLab Deploy Token (read_registry + write_registry)
-#   VPS_HOST               Public IP or domain of the VPS
-#   VPS_USER               SSH user on the VPS
+#   VPS_HOST               Public IP or domain of the Swarm manager
+#   VPS_USER               SSH user on the manager
 #   VPS_SSH_KEY            Private key whose public half is in VPS authorized_keys
 #   VPS_PORT               (optional) SSH port if not 22
+#   CF_ZONE_ID             Cloudflare Zone ID (Overview tab of the zone)
+#   CF_TOKEN               Cloudflare API token with `Zone.Cache Purge` permission
+#
+# Note: ghcr.io auth uses the auto-provided GITHUB_TOKEN — no secret needed.
+# The deploy-docker job declares `permissions: packages: write` for this.
 
 name: Release
 
@@ -138,49 +142,74 @@ jobs:
             --tag "${{ steps.tag.outputs.dist }}"
 
   # ─────────────────────────────────────────────────────────────────────
-  # Build docs-site image, push to GitLab registry, deploy to VPS.
+  # Build docs-site image, push to GitHub Container Registry, deploy.
   # ─────────────────────────────────────────────────────────────────────
   deploy-docker:
     name: Build & deploy docs image
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write          # required to push to ghcr.io
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve version from tag
-        id: version
+      # Image name must be lowercase for ghcr.io. github.repository can mix
+      # case (e.g. "withl5e/L5E") so we lowercase it here.
+      - name: Resolve image tags
+        id: img
         run: |
-          echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          REPO_LC="${GITHUB_REPOSITORY,,}"
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "name=ghcr.io/${REPO_LC}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}"      >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GitLab Container Registry
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: registry.gitlab.com
-          username: ${{ secrets.GITLAB_REGISTRY_USER }}
-          password: ${{ secrets.GITLAB_REGISTRY_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & push image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.docs-site
+          file: docs-site/Dockerfile
           push: true
           tags: |
-            registry.gitlab.com/ducmaster-group/l5e:${{ steps.version.outputs.value }}
-            registry.gitlab.com/ducmaster-group/l5e:latest
+            ${{ steps.img.outputs.name }}:${{ steps.img.outputs.version }}
+            ${{ steps.img.outputs.name }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: SSH into VPS and run deploy script
+      # Rolls the existing Swarm service `l5e_docs` onto the new image.
+      # --with-registry-auth forwards the manager's registry creds to workers
+      # (the manager must `docker login ghcr.io` once during bootstrap).
+      # --force re-deploys even when only the digest behind :latest changed.
+      - name: Roll Swarm service
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          envs: VERSION
           script: |
-            export VERSION="${{ steps.version.outputs.value }}"
-            ~/deploy-l5e.sh
+            docker service update \
+              --image ${{ steps.img.outputs.name }}:${{ steps.img.outputs.version }} \
+              --with-registry-auth \
+              --force \
+              l5e_docs
+
+      # Purge the Cloudflare cache tagged `global` so visitors see the new
+      # docs build immediately. Mirrors the endfield pattern. Requires the
+      # docs to emit a `Cache-Tag: global` response header at the edge.
+      - name: Purge Cloudflare cache (tag=global)
+        run: |
+          curl -fsS -X POST \
+            "https://api.cloudflare.com/client/v4/zones/${{ secrets.CF_ZONE_ID }}/purge_cache" \
+            -H "Authorization: Bearer ${{ secrets.CF_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --data '{"tags":["global"]}'

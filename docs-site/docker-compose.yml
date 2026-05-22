@@ -1,0 +1,47 @@
+# Docker Swarm stack file for the docs-site.
+#
+# Image lives on the GitHub Container Registry (ghcr.io). The owner/repo
+# path must be lowercase — GitHub repo "withl5e/l5e" → "withl5e/l5e".
+#
+# Bootstrap (once on the swarm manager):
+#   # Create a classic PAT with `read:packages` scope and login:
+#   echo <PAT> | docker login ghcr.io -u <github-username> --password-stdin
+#   docker stack deploy -c docs-site/docker-compose.yml l5e --with-registry-auth
+#
+# After bootstrap, the stack creates a service named `l5e_docs` (stack
+# name + service key). The release workflow updates this service with
+# `docker service update --image ... --with-registry-auth --force l5e_docs`.
+
+version: '3.9'
+
+services:
+  docs:
+    image: ghcr.io/withl5e/l5e:latest
+    ports:
+      - target: 8080
+        published: 8180
+        mode: host
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        order: start-first
+        failure_action: rollback
+        delay: 5s
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:8080/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

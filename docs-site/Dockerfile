@@ -1,8 +1,12 @@
-# Multi-stage Dockerfile for the docs-site app (./docs-site).
-# Built from the repo root because docs-site links to @withl5e/l5e via pnpm workspace.
+# Multi-stage Dockerfile for the docs-site app.
+# Build context must be the repo ROOT (not docs-site/) because docs-site
+# links to @withl5e/l5e via pnpm workspace — the build needs packages/core
+# and the workspace lockfile.
 #
-# Build:  docker build -f Dockerfile.docs-site -t l5e-docs-site:latest .
+# Build:  docker build -f docs-site/Dockerfile -t l5e-docs-site:latest .
 # Run:    docker run --rm -p 8080:8080 l5e-docs-site:latest
+# Push:   pushed to ghcr.io/<owner>/<repo> by .github/workflows/release.yml
+# Swarm:  docker stack deploy -c docs-site/docker-compose.yml l5e --with-registry-auth
 
 # ===== Base =====
 FROM node:22-alpine AS base
