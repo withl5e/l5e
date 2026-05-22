@@ -27,8 +27,9 @@ The actual workflow lives at [`.github/workflows/release.yml`](./.github/workflo
 
 The three packages must share the same version (the release workflow
 verifies this before publishing). The two templates pin the framework
-dependency, so end users running `npm create l5e@alpha` get the version
-that was just published.
+dependency, so end users running `npm create l5e` (or `@alpha`,
+`@beta`, depending on which channel the release lands on) get the
+version that was just published.
 
 > **Why not `examples/basic` or `docs-site`?** They use
 > `workspace:*` (linked locally) or are private — they don't ship to

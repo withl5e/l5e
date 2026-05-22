@@ -3,7 +3,7 @@
 Create a new app with the starter:
 
 ```sh
-npm create l5e@alpha my-app -- --template basic
+npm create l5e my-app -- --template basic
 cd my-app
 npm run dev
 ```
@@ -11,7 +11,7 @@ npm run dev
 Using pnpm:
 
 ```sh
-pnpm create l5e@alpha my-app --template basic
+pnpm create l5e my-app --template basic
 cd my-app
 pnpm dev
 ```
@@ -24,7 +24,7 @@ Available templates:
 Or run install and the dev server from one command:
 
 ```sh
-pnpm create l5e@alpha my-app --template basic --dev
+pnpm create l5e my-app --template basic --dev
 ```
 
 ## Manual App

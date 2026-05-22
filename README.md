@@ -7,7 +7,7 @@ HTML-first SSR MPA framework with **per-request CSS/JS bundling** — only the c
 ## Quick start
 
 ```sh
-npm create l5e@alpha my-app -- --template basic
+npm create l5e my-app -- --template basic
 cd my-app
 npm run dev
 ```
