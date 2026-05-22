@@ -11,9 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # pnpm version comes from the `packageManager` field in package.json
+      # (pnpm@11.0.9). Don't pass `version:` here — action errors with
+      # ERR_PNPM_BAD_PM_VERSION when both are set.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22
