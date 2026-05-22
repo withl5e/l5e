@@ -14,7 +14,6 @@ export function SearchBox() {
           type="search"
           placeholder="Search the docs…"
           autocomplete="off"
-          spellcheck="false"
           aria-label="Search the documentation"
         />
         <span class="search-box__kbd" aria-hidden="true">
