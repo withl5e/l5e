@@ -1,6 +1,6 @@
 {
   "name": "l5e-basic-example",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.1-alpha.2",
   "private": true,
   "type": "module",
   "scripts": {

@@ -1,0 +1,184 @@
+# Release workflow — fires on any `v*` tag push.
+#
+# Jobs:
+#   test          — gate. pnpm build + pnpm test + pnpm typecheck (same trio
+#                   as .github/workflows/ci.yml).
+#   publish-npm   — needs: test. Verifies the tag's version matches
+#                   packages/core/package.json, derives an npm dist-tag from
+#                   the prerelease suffix, and runs `pnpm -r publish`.
+#   deploy-docker — needs: test. Builds Dockerfile.docs-site, pushes to
+#                   GitLab Container Registry, then SSHs into the VPS and
+#                   runs ~/deploy-l5e.sh.
+#
+# Required secrets (GitHub repo → Settings → Secrets and variables → Actions):
+#
+#   NPM_TOKEN              npm.com automation token, publish scope on @withl5e/*
+#   GITLAB_REGISTRY_USER   GitLab Deploy Token username (or PAT username)
+#   GITLAB_REGISTRY_TOKEN  GitLab Deploy Token (read_registry + write_registry)
+#   VPS_HOST               Public IP or domain of the VPS
+#   VPS_USER               SSH user on the VPS
+#   VPS_SSH_KEY            Private key whose public half is in VPS authorized_keys
+#   VPS_PORT               (optional) SSH port if not 22
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+# Allow only one release per tag at a time so the registry / VPS don't
+# end up racing two concurrent pushes of the same image.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────
+  # Test gate — release jobs only run if this finishes green.
+  # ─────────────────────────────────────────────────────────────────────
+  test:
+    name: Test gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
+      - run: pnpm typecheck
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Publish all workspace packages to npm.
+  # ─────────────────────────────────────────────────────────────────────
+  publish-npm:
+    name: Publish to npm
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify tag matches package versions, resolve dist-tag
+        id: tag
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const tag = process.env.GITHUB_REF_NAME;          // e.g. v0.1.2-alpha.0
+          const expected = tag.replace(/^v/, '');
+          const pkgs = [
+            'packages/core/package.json',
+            'packages/richtext-payload/package.json',
+            'packages/create-l5e/package.json',
+          ];
+
+          const versions = pkgs.map((p) => {
+            const v = JSON.parse(fs.readFileSync(p, 'utf8')).version;
+            console.log(`  ${p} → ${v}`);
+            return { p, v };
+          });
+
+          const mismatches = versions.filter((x) => x.v !== expected);
+          if (mismatches.length > 0) {
+            console.error(`\n❌ Tag ${tag} (expected ${expected}) does not match:`);
+            mismatches.forEach((m) => console.error(`     ${m.p} = ${m.v}`));
+            process.exit(1);
+          }
+
+          // Pick npm dist-tag from prerelease suffix.
+          //   <x>-alpha.N  → alpha
+          //   <x>-beta.N   → beta
+          //   <x>-rc.N     → next
+          //   <x> (no suffix) → latest
+          let dist = 'latest';
+          const m = expected.match(/-(alpha|beta|rc)(?:\.|$)/i);
+          if (m) {
+            const label = m[1].toLowerCase();
+            dist = label === 'rc' ? 'next' : label;
+          }
+
+          console.log(`\n✓ Versions all match ${expected}`);
+          console.log(`✓ Dist-tag: ${dist}`);
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `dist=${dist}\nversion=${expected}\n`);
+          NODE
+
+      - run: pnpm -r build
+
+      - name: Publish (pnpm -r publish)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          pnpm -r publish \
+            --no-git-checks \
+            --access public \
+            --tag "${{ steps.tag.outputs.dist }}"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Build docs-site image, push to GitLab registry, deploy to VPS.
+  # ─────────────────────────────────────────────────────────────────────
+  deploy-docker:
+    name: Build & deploy docs image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version from tag
+        id: version
+        run: |
+          echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitLab Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.gitlab.com
+          username: ${{ secrets.GITLAB_REGISTRY_USER }}
+          password: ${{ secrets.GITLAB_REGISTRY_TOKEN }}
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.docs-site
+          push: true
+          tags: |
+            registry.gitlab.com/ducmaster-group/l5e:${{ steps.version.outputs.value }}
+            registry.gitlab.com/ducmaster-group/l5e:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: SSH into VPS and run deploy script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: VERSION
+          script: |
+            export VERSION="${{ steps.version.outputs.value }}"
+            ~/deploy-l5e.sh

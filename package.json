@@ -9,7 +9,8 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm --filter @withl5e/l5e test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "bump": "node scripts/bump-version.mjs"
   },
   "devDependencies": {
     "@types/express": "^4.17.25",
