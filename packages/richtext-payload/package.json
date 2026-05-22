@@ -1,6 +1,6 @@
 {
   "name": "@withl5e/richtext-payload",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Payload Lexical rich text renderer adapter for L5E.",
   "type": "module",
   "license": "MIT",
