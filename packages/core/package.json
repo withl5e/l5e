@@ -1,6 +1,6 @@
 {
   "name": "@withl5e/l5e",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "HTML-first SSR MPA framework with loaders, middleware, islands, actions, swap, SEO and cache controls.",
   "type": "module",
   "license": "MIT",
