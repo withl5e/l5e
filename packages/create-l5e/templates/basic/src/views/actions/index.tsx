@@ -1,8 +1,8 @@
 import { Fragment, useClientJs, useCss } from '@withl5e/l5e/jsx-runtime';
 
 export default function ActionsPage() {
-  useCss('./actions.css');
-  useClientJs('./client.ts');
+  useCss('/src/views/actions/actions.css');
+  useClientJs('/src/views/actions/client.ts');
 
   return (
     <Fragment>

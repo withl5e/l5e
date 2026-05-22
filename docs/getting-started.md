@@ -50,7 +50,7 @@ Use L5E JSX in view files:
 import { useCss } from '@withl5e/l5e/jsx-runtime';
 
 export default function HomePage() {
-  useCss('./home.css');
+  useCss('/src/views/home/home.css');
   return <main>Hello from L5E</main>;
 }
 ```

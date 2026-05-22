@@ -3,7 +3,7 @@ import { Fragment, useCss } from '@withl5e/l5e/jsx-runtime';
 import type { HomeLoaderData } from './loader';
 
 export default function HomePage({ now }: HomeLoaderData) {
-  useCss('./home.css');
+  useCss('/src/views/home/home.css');
 
   return (
     <Fragment>

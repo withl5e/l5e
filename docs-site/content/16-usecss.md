@@ -7,6 +7,22 @@ order: 16
 
 # useCss
 
-- Call `useCss('src/views/<view>/styles.css')` inside the view component.
+- Call `useCss('/src/views/<view>/styles.css')` inside the view component.
 - L5E emits the `<link>` tag in the response and skips it on other views.
 - In production, all view CSS for the request is bundled together for one round-trip.
+
+## Path convention
+
+> **The path must be an absolute path from the project root, starting with
+> `/src/`** — e.g. `/src/views/home/styles.css`. Relative forms
+> (`./styles.css`, `../shared/x.css`) and bare paths (`src/views/...`
+> without the leading `/`) are not supported.
+
+This is because the build-time bundler regex-scans your view files for
+literal `useCss('…')` calls **before any JS executes** — the argument
+has to be a string the scanner can resolve without knowing the calling
+file's location.
+
+**Planned for a later release**: a path helper that gives you typesafe
+imports and relative paths (`useCss(css('./styles.css'))` or similar)
+without losing the static scannability the bundler relies on.

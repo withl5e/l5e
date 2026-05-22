@@ -17,10 +17,15 @@ version: '3.9'
 services:
   docs:
     image: ghcr.io/withl5e/l5e:latest
+    # Ingress (default) mode lets two tasks coexist briefly during a
+    # rolling update — required for `update_config.order: start-first`
+    # below. The socket peer IP becomes the Swarm overlay IP; the real
+    # client IP comes through Cloudflare's `CF-Connecting-IP` /
+    # `X-Forwarded-For` headers.
     ports:
       - target: 8080
         published: 8180
-        mode: host
+        protocol: tcp
     deploy:
       replicas: 1
       update_config:
