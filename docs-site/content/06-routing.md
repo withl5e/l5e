@@ -161,6 +161,21 @@ export const loader: LoaderFunction = async (requestInfo) => {
 };
 ```
 
+In components, read the same `params` through the `useRequest()` hook — no prop-drilling:
+
+```tsx
+import { useRequest } from '@withl5e/l5e/jsx-runtime';
+
+export default function Article() {
+  const { params } = useRequest();
+  return <article data-slug={params.slug}>{params.slug}</article>;
+}
+```
+
+The hook reads from the same per-request context as the loader, so a component nested
+anywhere in the view tree sees the same `params` shape (raw or post-validated) — see
+[[10-userequest-and-locals]] for the full hook surface.
+
 `requestInfo.params` is typed `Record<string, any> | undefined` — `undefined` only when the
 route handler returned a bare view name string. For routes defined via `defineRoutes()` the
 table guarantees the required keys you declared.
