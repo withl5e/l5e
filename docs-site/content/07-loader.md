@@ -94,7 +94,7 @@ export const loader: LoaderFunction = async (requestInfo) => {
 ```
 
 ```ts
-// Route: { path: '/docs/$$', view: 'docs' }
+// Route: { path: `/docs/$`, view: 'docs' }
 export const loader: LoaderFunction = async (requestInfo) => {
   const path = String(requestInfo.params?._splat);   // e.g. 'getting-started/install'
   const segments = path.split('/');                  // ['getting-started', 'install']

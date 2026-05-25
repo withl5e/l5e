@@ -20,7 +20,7 @@ export default defineRoutes([
   { path: '/', view: 'home' },
   { path: '/about', view: 'about' },
   { path: '/blog/$slug', view: 'article' },
-  { path: '/docs/$$', view: 'docs' },
+  { path: `/docs/$`, view: 'docs' },
 ]);
 ```
 
@@ -64,7 +64,7 @@ construction; matching is a linear scan in priority order, so declaration order 
 
 ```ts
 defineRoutes([
-  { path: '/docs/$$', view: 'docs' },
+  { path: `/docs/$`, view: 'docs' },
   { path: '/docs/api', view: 'api-docs' },
 ]);
 // /docs/api → 'api-docs'; /docs/intro/setup → 'docs'
