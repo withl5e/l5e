@@ -277,6 +277,7 @@ export function useRequest() {
     request: context.request,
     view: context.viewName,
     locals: (context.request.locals ?? {}) as Record<string, unknown>,
+    params: (context.request.params ?? {}) as Record<string, any>,
 
     // Add cache tags
     addCacheTag: (tag: string | string[] | Record<string, boolean>) => {

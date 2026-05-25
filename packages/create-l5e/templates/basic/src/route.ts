@@ -1,7 +1,6 @@
-import type { RequestInfo } from '@withl5e/l5e/entry-server';
+import { defineRoutes } from '@withl5e/l5e/router';
 
-export default function routeHandler(requestInfo: RequestInfo) {
-  if (requestInfo.pathname === '/') return 'home';
-  if (requestInfo.pathname === '/actions') return 'actions';
-  return null;
-}
+export default defineRoutes([
+  { path: '/', view: 'home' },
+  { path: '/actions', view: 'actions' },
+]);

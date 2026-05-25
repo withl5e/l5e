@@ -39,6 +39,7 @@ export default defineConfig({
         island: resolve(__dirname, 'src/island/index.ts'),
         'island/client': resolve(__dirname, 'src/island/client.ts'),
         'island/runtime': resolve(__dirname, 'src/island/runtime.ts'),
+        router: resolve(__dirname, 'src/router/index.ts'),
       },
       formats: ['es'],
     },

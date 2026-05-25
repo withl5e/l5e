@@ -21,13 +21,19 @@ import { useRequest } from '@withl5e/l5e/jsx-runtime';
 
 ```ts
 const {
-  request,        // RequestInfo (url, pathname, method, headers, query, ip, locals)
+  request,        // RequestInfo (url, pathname, method, headers, query, ip, locals, params)
   view,           // string | undefined — the view name returned by route.ts
   locals,         // shortcut to request.locals — typed as Record<string, unknown>
+  params,         // shortcut to request.params — populated by defineRoutes (or your handler)
   addCacheTag,    // (tag) => void — add a cache tag for this response
   getCacheTags,   // () => string[] — read tags accumulated so far
 } = useRequest();
 ```
+
+`params` carries whatever the route table extracted from the URL — `params.slug` for a
+`/blog/$slug` route, `params._splat` for a `/docs/$` route. See [[06-routing]] for the table
+syntax. If your `src/route.ts` is a plain function that returns a bare view-name string,
+`params` is `{}`.
 
 `useRequest` reads from an `AsyncLocalStorage` set up at the start of the render. It must be
 called **inside a component being rendered** — calling it at module scope or from a `setTimeout`

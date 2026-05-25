@@ -74,6 +74,10 @@
     "./island/runtime": {
       "types": "./src/island/runtime.ts",
       "default": "./dist/island/runtime.js"
+    },
+    "./router": {
+      "types": "./src/router/index.ts",
+      "default": "./dist/router.js"
     }
   },
   "scripts": {

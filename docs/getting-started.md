@@ -66,6 +66,19 @@ export default function routeHandler(requestInfo: RequestInfo) {
 }
 ```
 
+For apps with dynamic segments or catch-all routes, use the typed route table —
+see [docs/router.md](./router.md):
+
+```ts
+import { defineRoutes } from '@withl5e/l5e/router';
+
+export default defineRoutes([
+  { path: '/', view: 'home' },
+  { path: '/blog/$slug', view: 'article' },
+  { path: '/docs/$', view: 'docs' },
+]);
+```
+
 Start the server:
 
 ```ts

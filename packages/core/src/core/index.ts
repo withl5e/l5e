@@ -6,6 +6,7 @@ export {
   type LoaderResult,
   type RenderResult,
   type RequestInfo,
+  type RouteResult,
   type SchemaMarkup,
 } from './entry-server';
 export {

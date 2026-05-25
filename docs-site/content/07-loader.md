@@ -27,8 +27,8 @@ export type ArticleLoaderData = {
 };
 
 export const loader: LoaderFunction = async (requestInfo): Promise<LoaderResult> => {
-  const slug = requestInfo.pathname?.split('/').pop();
-  if (!slug) throw new NotFoundException('Missing slug');
+  // From a `/blog/$slug` route in defineRoutes — see [[06-routing]].
+  const slug = String(requestInfo.params?.slug);
 
   const article = await db.articles.findUnique({ where: { slug } });
   if (!article) throw new NotFoundException(`Article ${slug} not found`);
@@ -78,6 +78,38 @@ interface LoaderResult {
 - **`rawHtml`** — emits the JSX output as-is, without wrapping in `index.html`. Useful when a
   view *is* the document (rare; most teams prefer `rawResponse`).
 - **`rawResponse`** — see [[08-raw-response]].
+
+## Reading route params
+
+When `src/route.ts` uses `defineRoutes()`, captured URL segments are on
+`requestInfo.params` (see [[06-routing]]). Named params land at their declared key; a splat
+lands at `_splat`.
+
+```ts
+// Route: { path: '/blog/$slug', view: 'article' }
+export const loader: LoaderFunction = async (requestInfo) => {
+  const slug = String(requestInfo.params?.slug);
+  return { props: { slug } };
+};
+```
+
+```ts
+// Route: { path: '/docs/$$', view: 'docs' }
+export const loader: LoaderFunction = async (requestInfo) => {
+  const path = String(requestInfo.params?._splat);   // e.g. 'getting-started/install'
+  const segments = path.split('/');                  // ['getting-started', 'install']
+  return { props: { path, segments } };
+};
+```
+
+`requestInfo.params` is typed `Record<string, any> | undefined` — `undefined` only when the
+route handler returned a bare view name string instead of populating params. For routes
+defined via `defineRoutes()` the table guarantees the keys you declared; coercing with
+`String(...)` keeps the loader honest under strict TS without a runtime check.
+
+If you need typed coercion or validation (e.g. numeric IDs, enum slugs), do it once in the
+route table via `params.parse` or `params.schema` (Zod-compatible) so every loader sees the
+post-validated shape — see the routing doc.
 
 ## Named exports beside `loader`
 

@@ -68,7 +68,13 @@ export interface RequestInfo {
   query?: Record<string, any>;
   ip?: string;
   locals?: Record<string, unknown>;
+  params?: Record<string, any>;
 }
+
+export type RouteResult =
+  | string
+  | null
+  | { view: string; params?: Record<string, any> };
 
 // SchemaMarkup type - có thể là single schema hoặc array of schemas
 // Sử dụng any để tương thích với schema-dts types từ frontend
@@ -154,9 +160,9 @@ export async function render(url: string, requestInfo: RequestInfo = {}): Promis
   return runInRenderContext(async () => {
     try {
       // Step 1: Call route handler to get view name
-      const viewName = await routeHandler(requestInfo);
+      const rawRouteResult: RouteResult = await routeHandler(requestInfo);
 
-      if (!viewName) {
+      if (!rawRouteResult) {
         // Throw NotFoundException to render error_404 view
         throw new NotFoundException('Page not found', {
           path: requestInfo.path,
@@ -164,6 +170,11 @@ export async function render(url: string, requestInfo: RequestInfo = {}): Promis
           url: requestInfo.url?.href,
         });
       }
+
+      const viewName =
+        typeof rawRouteResult === 'string' ? rawRouteResult : rawRouteResult.view;
+      requestInfo.params =
+        typeof rawRouteResult === 'string' ? {} : (rawRouteResult.params ?? {});
 
       // Set view name in render context
       setViewName(viewName);
