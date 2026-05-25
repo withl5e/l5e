@@ -7,6 +7,7 @@ const externalPackages = [
   'compression',
   'esbuild',
   'express',
+  'path-to-regexp',
   'request-ip',
   'react',
   'react-dom',

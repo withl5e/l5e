@@ -1,8 +1,7 @@
+import { match as p2rMatch, type MatchFunction } from 'path-to-regexp';
 import { BadRequestException } from '../core/exceptions';
 import type { RequestInfo } from '../core/entry-server';
-import { tokenize } from './lexer';
-import { compareSpecificity, parse, type RouteAst } from './parser';
-import { match, splitPath } from './matcher';
+import { compareSpecificity, pathSpecificity, type Specificity } from './specificity';
 
 export type RouteHandlerResult =
   | string
@@ -20,11 +19,11 @@ export type RouteResolveResult =
   | { view: string; params?: Record<string, any> };
 
 export type ParamsSchema<TParams = Record<string, any>> = {
-  parse: (raw: Record<string, string>) => TParams;
+  parse: (raw: Record<string, string | string[]>) => TParams;
 };
 
 export type RouteParamsConfig = {
-  parse?: (raw: Record<string, string>) => Record<string, any>;
+  parse?: (raw: Record<string, string | string[]>) => Record<string, any>;
   schema?: ParamsSchema;
 };
 
@@ -39,7 +38,8 @@ export type RouteEntry = {
 
 type CompiledRoute = {
   entry: RouteEntry;
-  ast: RouteAst;
+  matchFn: MatchFunction<Record<string, string | string[]>>;
+  specificity: Specificity;
 };
 
 export function defineRoutes(
@@ -60,29 +60,35 @@ export function defineRoutes(
         `defineRoutes: route "${entry.path}" must define either "view" or "resolve"`,
       );
     }
-    const tokens = tokenize(entry.path);
-    const ast = parse(tokens, entry.path);
-    return { entry, ast };
+    let matchFn: MatchFunction<Record<string, string | string[]>>;
+    try {
+      matchFn = p2rMatch<Record<string, string | string[]>>(entry.path);
+    } catch (err) {
+      throw new TypeError(
+        `defineRoutes: invalid path "${entry.path}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    return { entry, matchFn, specificity: pathSpecificity(entry.path) };
   });
 
-  compiled.sort((a, b) => compareSpecificity(a.ast.specificity, b.ast.specificity));
+  compiled.sort((a, b) => compareSpecificity(a.specificity, b.specificity));
 
   return async function routeHandler(
     requestInfo: RequestInfo,
   ): Promise<RouteHandlerResult> {
     const pathname = requestInfo.pathname ?? '/';
-    const urlSegments = splitPath(pathname);
 
-    for (const { entry, ast } of compiled) {
-      const rawParams = match(ast, urlSegments);
-      if (rawParams === null) continue;
+    for (const { entry, matchFn } of compiled) {
+      const result = matchFn(pathname);
+      if (!result) continue;
 
-      let params: Record<string, any> = rawParams;
+      let params: Record<string, any> = result.params;
       // `parse` wins over `schema` when both are set (most explicit escape hatch).
-      const validator = entry.params?.parse ?? entry.params?.schema?.parse.bind(entry.params.schema);
+      const validator =
+        entry.params?.parse ?? entry.params?.schema?.parse.bind(entry.params.schema);
       if (validator) {
         try {
-          params = validator(rawParams);
+          params = validator(params as Record<string, string | string[]>);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           throw new BadRequestException(`Invalid route params: ${message}`, {

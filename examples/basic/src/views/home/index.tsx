@@ -11,8 +11,9 @@ export default function HomePage({ now }: HomeLoaderData) {
         <a href="/">Home</a>
         <a href="/rewrite-demo">Rewrite demo</a>
         <a href="/actions">Action + swap</a>
-        <a href="/blog/hello-world">Blog: $slug</a>
-        <a href="/docs/getting-started/install">Docs: splat</a>
+        <a href="/blog/hello-world">Blog: :slug</a>
+        <a href="/blog/hello-world/page/2">Blog: :slug + page</a>
+        <a href="/docs/getting-started/install">Docs: *splat</a>
       </nav>
       <main>
         <section class="panel home-panel">

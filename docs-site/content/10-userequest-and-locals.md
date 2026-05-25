@@ -30,10 +30,10 @@ const {
 } = useRequest();
 ```
 
-`params` carries whatever the route table extracted from the URL — `params.slug` for a
-`/blog/$slug` route, `params._splat` for a `/docs/$` route. See [[06-routing]] for the table
-syntax. If your `src/route.ts` is a plain function that returns a bare view-name string,
-`params` is `{}`.
+`params` carries whatever the route table extracted from the URL — `params.slug` (string) for
+a `/blog/:slug` route, `params.path` (string array) for a `/docs/*path` splat route. See
+[[06-routing]] for the table syntax. If your `src/route.ts` is a plain function that returns
+a bare view-name string, `params` is `{}`.
 
 `useRequest` reads from an `AsyncLocalStorage` set up at the start of the render. It must be
 called **inside a component being rendered** — calling it at module scope or from a `setTimeout`

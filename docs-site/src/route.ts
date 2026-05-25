@@ -1,11 +1,8 @@
-import type { RequestInfo } from '@withl5e/l5e/entry-server';
+import { defineRoutes } from '@withl5e/l5e/router';
 
-export default function routeHandler(requestInfo: RequestInfo) {
-  const { pathname } = requestInfo;
-  if (!pathname) return null;
-  if (pathname === '/favicon.ico') return null;
-  if (pathname === '/') return 'home';
-  if (pathname === '/sitemap.xml') return 'sitemap';
-  if (pathname === '/docs' || pathname.startsWith('/docs/')) return 'docs';
-  return null;
-}
+export default defineRoutes([
+  { path: '/', view: 'home' },
+  { path: '/sitemap.xml', view: 'sitemap' },
+  { path: '/docs', view: 'docs' },
+  { path: '/docs/:slug', view: 'docs' },
+]);

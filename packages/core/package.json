@@ -92,6 +92,7 @@
     "compression": "^1.7.4",
     "esbuild": "^0.24.2",
     "express": "^4.18.2",
+    "path-to-regexp": "^8.4.2",
     "request-ip": "^3.3.0",
     "rollup": "^4.0.0",
     "sirv": "^2.0.3"

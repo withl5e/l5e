@@ -1,16 +1,15 @@
 ---
 title: Routing
-description: defineRoutes maps URLs to view names with dynamic params, splats and async resolve — backed by the same simple route handler contract.
+description: defineRoutes maps URLs to view names with dynamic params, optional groups and splats — backed by path-to-regexp.
 section: Routing & Navigation
 order: 6
 ---
 
 # Routing
 
-L5E routing is a single function in `src/route.ts`. It receives the request, returns a view
-name (a folder under `src/views/`), and that's the contract. For most apps the cleanest way
-to author that function is `defineRoutes()` — a typed route table that handles dynamic
-segments, splats and parsed params without leaving the framework.
+`src/route.ts` is one function: request in, view name out. For most apps the cleanest way to
+write it is `defineRoutes()` — a typed route table backed by
+[`path-to-regexp`](https://github.com/pillarjs/path-to-regexp).
 
 ```ts
 // src/route.ts
@@ -19,52 +18,58 @@ import { defineRoutes } from '@withl5e/l5e/router';
 export default defineRoutes([
   { path: '/', view: 'home' },
   { path: '/about', view: 'about' },
-  { path: '/blog/$slug', view: 'article' },
-  { path: `/docs/$`, view: 'docs' },
+  { path: '/blog/:slug', view: 'article' },
+  { path: '/cat/:slug{/page/:page}', view: 'category' },
+  { path: '/docs/*path', view: 'docs' },
 ]);
 ```
 
-| Pattern        | Matches                                  | Captures               |
-| -------------- | ---------------------------------------- | ---------------------- |
-| `/`            | only the root                            | —                      |
-| `/about`       | exact `/about`                           | —                      |
-| `/blog/$slug`  | one URL segment                          | `params.slug`          |
-| `/docs/$`      | one or more trailing segments            | `params._splat`        |
+| Pattern                       | Matches                                                  | Captures                                |
+| ----------------------------- | -------------------------------------------------------- | --------------------------------------- |
+| `/`                           | only the root                                            | —                                       |
+| `/about`                      | exact `/about`                                           | —                                       |
+| `/blog/:slug`                 | one URL segment                                          | `params.slug` (string)                  |
+| `/cat/:slug{/page/:page}`     | `/cat/x` and `/cat/x/page/2` (group is atomic)           | `params.slug`, optional `params.page`   |
+| `/list/:cat{/:page}{/:size}`  | `/list/x`, `/list/x/2`, `/list/x/2/20` (ordered, atomic) | per-key strings                         |
+| `/docs/*path`                 | one or more trailing segments                            | `params.path` (`string[]`)              |
 
-Captured values land on `requestInfo.params` and are also exposed by `useRequest().params`.
-Each value is `decodeURIComponent`-decoded; `/blog/hello%20world` yields `slug = 'hello world'`.
+Captures land on `requestInfo.params` and `useRequest().params`. All values are
+`decodeURIComponent`-decoded.
 
-```ts
-// src/views/article/loader.ts
-export const loader: LoaderFunction = async (requestInfo) => {
-  const slug = requestInfo.params?.slug;
-  return { props: { slug } };
-};
-```
+## Path syntax
 
-```tsx
-// src/views/article/index.tsx
-import { useRequest } from '@withl5e/l5e/jsx-runtime';
+- `:name` → one segment, string
+- `*name` → one-or-more trailing segments, `string[]`. Greedy; bare parent doesn't match (`/docs` does not match `/docs/*path`).
+- `{...}` → atomic optional group. Multiple sibling `{...}{...}` are ordered.
 
-export default function Article({ slug }) {
-  const { params } = useRequest();
-  return <article data-slug={params.slug}>{slug}</article>;
-}
-```
+## Optional groups
 
-## Matching priority
-
-When more than one route could match, the more specific one wins. Sort happens once at
-construction; matching is a linear scan in priority order, so declaration order is irrelevant.
-
-1. Root `/` first
-2. Static segments beat dynamic at the same depth (`/docs/api` beats `/docs/$slug`)
-3. Deeper paths beat shallower ones
-4. Splat routes are tried last
+`{...}` is the only optional syntax (no per-segment `?`). Wrap a single optional param in `{}` too.
 
 ```ts
 defineRoutes([
-  { path: `/docs/$`, view: 'docs' },
+  { path: '/blog/:slug{/:page}', view: 'article' },              // trailing optional param
+  { path: '/cat/:slug{/page/:page}', view: 'category' },         // static-prefixed optional
+  { path: '/list/:cat{/:page}{/:size}', view: 'list' },          // ordered atomic groups
+]);
+```
+
+Atomic: `/cat/laptops/page` does **not** match `/cat/:slug{/page/:page}` — the group needs
+both pieces. Absent groups simply don't add their keys to `params`; default with `?? value`
+in the loader.
+
+## Matching priority
+
+More specific wins. Sort happens once at construction, so declaration order is irrelevant.
+
+1. Required-only routes beat group-bearing routes
+2. Static segments beat dynamic at the same depth (`/docs/api` beats `/docs/:slug`)
+3. Deeper required paths beat shallower
+4. Splat (`*name`) routes are tried last
+
+```ts
+defineRoutes([
+  { path: '/docs/*path', view: 'docs' },
   { path: '/docs/api', view: 'api-docs' },
 ]);
 // /docs/api → 'api-docs'; /docs/intro/setup → 'docs'
@@ -72,18 +77,17 @@ defineRoutes([
 
 ## params.parse
 
-Run a validator on each match before the loader sees the params. Throwing turns into a
-`400 Bad Request` rendered through the `_error` view, so this is the right place for type
-coercion and shape checks.
+Validate or coerce captured params before the loader sees them. Throwing turns into a
+`400 Bad Request` rendered through `_error`.
 
 ```ts
 defineRoutes([
   {
-    path: '/posts/$id',
+    path: '/posts/:id',
     view: 'post',
     params: {
       parse: ({ id }) => {
-        if (!/^\d+$/.test(id)) throw new Error('id must be numeric');
+        if (!/^\d+$/.test(id as string)) throw new Error('id must be numeric');
         return { id: Number(id) };
       },
     },
@@ -93,66 +97,89 @@ defineRoutes([
 
 ## params.schema (Zod)
 
-`params.schema` accepts any object with a `parse(raw)` method that returns the typed shape —
-that's exactly the shape of `z.object(...)`, so Zod works without the router importing it.
-Zod stays an optional app dependency.
-
-```sh
-pnpm add zod
-```
+`params.schema` accepts anything with a `parse(raw)` method — `z.object(...)` fits without
+the router importing Zod. Zod stays an optional app dep (`pnpm add zod`).
 
 ```ts
 import { z } from 'zod';
-import { defineRoutes } from '@withl5e/l5e/router';
 
-export default defineRoutes([
+defineRoutes([
   {
-    path: '/posts/$id',
+    path: '/posts/:id',
     view: 'post',
     params: {
-      schema: z.object({
-        id: z.coerce.number().int().positive(),
-      }),
+      schema: z.object({ id: z.coerce.number().int().positive() }),
     },
   },
 ]);
 ```
 
-For `/posts/123` the loader sees `requestInfo.params = { id: 123 }` — coerced and validated.
-For `/posts/abc` the schema throws a `ZodError`, which the router wraps as `400 Bad Request`
-through the `_error` view (same path as `params.parse`).
+`/posts/123` → `{ id: 123 }`. `/posts/abc` → `ZodError` becomes a 400. Yup, Valibot,
+ArkType, or a hand-rolled `{ parse(raw): T }` all work. When both `parse` and `schema` are
+set, `parse` wins.
 
-Any validator-style library with a compatible signature works — Yup, Valibot, ArkType — or
-roll your own:
+## Reading route params
+
+Captured values live on `requestInfo.params` and are exposed via `useRequest().params`. The
+exact shape depends on whether the route declared `parse` / `schema`:
+
+- **No `parse` / `schema`** — the loader sees the raw matcher output: `:name` → string,
+  `*name` → `string[]`, optional-group keys absent when the group didn't match.
+- **With `parse` / `schema`** — the loader sees whatever the validator returned. Coerce
+  there once and every loader/component reads the post-validated shape; no re-coercion below.
 
 ```ts
-const idSchema = {
-  parse: (raw: Record<string, string>) => {
-    if (!/^\d+$/.test(raw.id)) throw new Error('id must be numeric');
-    return { id: Number(raw.id) };
-  },
+// Raw shape — Route: { path: '/blog/:slug', view: 'article' }
+export const loader: LoaderFunction = async (requestInfo) => {
+  const slug = String(requestInfo.params?.slug);
+  return { props: { slug } };
 };
 ```
 
-When both `parse` and `schema` are set on the same route, `parse` wins — it's the most
-explicit escape hatch.
+```ts
+// Optional group — Route: { path: '/cat/:slug{/page/:page}', view: 'category' }
+export const loader: LoaderFunction = async (requestInfo) => {
+  const slug = String(requestInfo.params?.slug);
+  const page = Number(requestInfo.params?.page ?? 1);  // default when group is absent
+  return { props: { slug, page } };
+};
+```
+
+```ts
+// Splat as array — Route: { path: '/docs/*path', view: 'docs' }
+export const loader: LoaderFunction = async (requestInfo) => {
+  const segments = (requestInfo.params?.path ?? []) as string[];
+  return { props: { path: segments.join('/'), segments } };
+};
+```
+
+```ts
+// Post-schema shape — Route uses { params: { schema: z.object({ id: z.coerce.number() }) } }
+export const loader: LoaderFunction = async (requestInfo) => {
+  const id = requestInfo.params?.id as number;   // already coerced by Zod
+  return { props: { id } };
+};
+```
+
+`requestInfo.params` is typed `Record<string, any> | undefined` — `undefined` only when the
+route handler returned a bare view name string. For routes defined via `defineRoutes()` the
+table guarantees the required keys you declared.
 
 ## Async resolve
 
-When the path is just a matcher and the view (or even the view's identity) comes from an API,
-CMS, or cached slug map, use `resolve()` instead of `view`. The router calls it after a
-successful path match and uses its return value as the routing result.
+When the view comes from an API, CMS, or cached slug map, use `resolve()` instead of `view`.
+The router calls it after a successful path match.
 
 ```ts
 import { defineRoutes } from '@withl5e/l5e/router';
 import { RedirectException } from '@withl5e/l5e';
 
-export default defineRoutes([
+defineRoutes([
   { path: '/', view: 'home' },
   {
-    path: '/$slug',
+    path: '/:slug',
     async resolve({ params }) {
-      const entry = await cms.findBySlug(params.slug);
+      const entry = await cms.findBySlug(params.slug as string);
       if (!entry) return null;
       if (entry.redirectTo) throw new RedirectException(entry.redirectTo, 301);
       return { view: entry.type, params: { slug: params.slug, id: entry.id } };
@@ -161,19 +188,56 @@ export default defineRoutes([
 ]);
 ```
 
-`resolve()` receives `{ params, requestInfo }` and returns a view name, a `{ view, params }`
-object, or `null`. Returning `null` from `resolve()` is authoritative — the router does
-**not** fall through to lower-priority routes after a path match. When both `view` and
-`resolve` are set, `resolve` wins. `RedirectException` thrown inside `resolve` propagates
-unchanged.
+`resolve()` returns a view name, `{ view, params }`, or `null`. `null` is authoritative —
+the router does **not** fall through to lower-priority routes. `resolve` wins over `view`
+when both are set. `RedirectException` propagates unchanged.
+
+**Order:** `params.parse` / `params.schema` runs *before* `resolve()`, so `params` arrives
+already validated. Declare a Zod schema and write `resolve` against the typed shape directly.
 
 For high-traffic apps, cache the slug → entry lookup in module scope and refresh on a timer
-or via an invalidation webhook, so each request only does a `Map.get`.
+or via a webhook so each request only does a `Map.get`.
+
+### Pattern: article-or-category with pagination
+
+A top-level slug that's either a single article or a paginated category index is one route
+plus an optional group:
+
+```ts
+defineRoutes([
+  { path: '/', view: 'home' },
+  { path: '/about', view: 'about' },                  // static wins via specificity
+  {
+    path: '/:slug{/page/:page}',
+    async resolve({ params }) {
+      const slug = params.slug as string;
+      const entry = await cms.findBySlug(slug);
+      if (!entry) return null;
+
+      if (entry.kind === 'article') {
+        if (params.page) return null;                 // /:slug/page/N on article → 404
+        return { view: 'article', params: { slug, id: entry.id } };
+      }
+      if (entry.kind === 'category') {
+        return {
+          view: 'category',
+          params: { slug, page: Number(params.page ?? 1), id: entry.id },
+        };
+      }
+      return null;
+    },
+  },
+]);
+```
+
+Static routes still win because specificity puts required-only patterns first. The catch-all
+is greedy — `return null` for anything the CMS doesn't have (or invalid shapes like
+`/article-slug/page/2`).
 
 ## Redirects
 
-Throw `RedirectException` from anywhere — routing, a loader, even a middleware. The
-framework converts it into the appropriate `30x` response with a `Location` header.
+Throw `RedirectException` from anywhere — routing, loader, middleware. The framework converts
+it into a `30x` with a `Location` header.
 
 ```ts
 import { RedirectException } from '@withl5e/l5e';
@@ -183,7 +247,7 @@ if (pathname === '/old-url') throw new RedirectException('/new-url', 301);
 
 ## Trailing-slash normalization
 
-Best handled in `src/global-loader.ts` so the rule is applied uniformly before any view runs:
+Handle in `src/global-loader.ts` so the rule applies uniformly:
 
 ```ts
 if (pathname && pathname !== '/' && pathname.endsWith('/')) {
@@ -206,32 +270,28 @@ interface RequestInfo {
   query?: Record<string, any>;
   ip?: string;
   locals?: Record<string, unknown>;  // populated by middleware
-  params?: Record<string, any>;      // populated by defineRoutes (or your own handler)
+  params?: Record<string, any>;      // strings from :name, string[] from *name
 }
 ```
 
-`locals` is the bridge from middleware to routing/loaders — see [[09-middleware]] for how to
-put values there. `params` is whatever the route table extracted from the URL.
+`locals` is the middleware bridge (see [[09-middleware]]). `params` is whatever the route
+table extracted.
 
 ## Anti-patterns
 
-- **Don't fetch view data inside `route.ts`.** Routing decides *which* view; the view's loader
-  decides *what data*. Mixing them blocks `null` returns from going through the 404 path and
-  makes caching murky.
+- **Don't fetch view data inside `route.ts`.** Routing decides *which* view; the loader
+  decides *what data*. Mixing them muddies caching and the 404 path.
 - **Don't catch exceptions in the router.** Let `RedirectException` / `NotFoundException` /
-  `InternalServerErrorException` propagate — the framework knows how to translate each into a
-  response.
-- **Don't keep slow synchronous work in the hot path.** If routing depends on remote data,
-  cache the lookup table in module scope and refresh it on a timer; per-request DB hits will
-  dominate your TTFB.
+  `InternalServerErrorException` propagate.
+- **Don't keep slow synchronous work in the hot path.** Cache remote lookups in module scope
+  and refresh on a timer; per-request DB hits dominate TTFB.
 
 ## Escape hatch: a plain function
 
-`defineRoutes()` is a convenience. The underlying contract is just a function — if your
-routing logic is small, gnarly, or doesn't fit a table, write one yourself.
+`defineRoutes()` is a convenience. The contract is just a function — if your logic is small
+or doesn't fit a table, write it directly:
 
 ```ts
-// src/route.ts
 import type { RequestInfo } from '@withl5e/l5e/entry-server';
 
 export default function routeHandler({ pathname }: RequestInfo): string | null {
@@ -241,7 +301,5 @@ export default function routeHandler({ pathname }: RequestInfo): string | null {
 }
 ```
 
-Return a string to render `src/views/<string>/`, `null` for "not matched" (the framework
-takes the 404 path), or a `Promise` of either to do async work. Throw `RedirectException` to
-redirect. The handler can also return `{ view, params }` directly if you want to populate
-`requestInfo.params` from your own logic without going through `defineRoutes`.
+Return a string, `null`, a `Promise` of either, or `{ view, params }` to populate
+`requestInfo.params` from your own logic. Throw `RedirectException` to redirect.

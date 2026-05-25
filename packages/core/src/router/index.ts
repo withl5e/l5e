@@ -7,4 +7,3 @@ export {
   type RouteParamsConfig,
   type RouteResolveResult,
 } from './define-routes';
-export { RoutePatternError } from './lexer';
