@@ -203,6 +203,168 @@
   margin: 0;
 }
 
+/* ===== Architecture flow diagrams (raw HTML embedded in markdown) =====
+   Box-and-arrow diagrams built from <div>s so they theme with the rest of
+   the docs (dark mode flows through the CSS variables) and stay editable as
+   text. No inline styles — every diagram reuses the classes below. */
+
+.docs-content .l5e-diag {
+  margin: 1.75rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.docs-content .l5e-diag__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0.625rem;
+  width: 100%;
+}
+
+.docs-content .l5e-diag__node {
+  flex: 1 1 0;
+  min-width: 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+
+.docs-content .l5e-diag__node--accent {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.docs-content .l5e-diag__node--center {
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.docs-content .l5e-diag__icon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  color: var(--accent);
+}
+
+.docs-content .l5e-diag__kicker {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.docs-content .l5e-diag__node--accent .l5e-diag__kicker {
+  color: var(--accent);
+}
+
+.docs-content .l5e-diag__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.docs-content .l5e-diag__title code,
+.docs-content .l5e-diag__desc code {
+  font-size: 0.85em;
+}
+
+.docs-content .l5e-diag__desc {
+  font-size: 0.8125rem;
+  color: var(--fg-muted);
+  line-height: 1.45;
+}
+
+.docs-content .l5e-diag__arrow {
+  align-self: center;
+  color: var(--fg-subtle);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Dashed container that frames a logical region (per-request context, global
+   cache, build lane). Label floats on the top border. */
+.docs-content .l5e-diag__group {
+  position: relative;
+  width: 100%;
+  padding: 1.4rem 0.85rem 0.95rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-muted) 50%, transparent);
+}
+
+.docs-content .l5e-diag__group--accent {
+  border-color: var(--accent);
+}
+
+.docs-content .l5e-diag__group-label {
+  position: absolute;
+  top: -0.62rem;
+  left: 0.85rem;
+  padding: 0 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  background: var(--bg);
+}
+
+.docs-content .l5e-diag__group--accent .l5e-diag__group-label {
+  color: var(--accent);
+}
+
+.docs-content .l5e-diag__chip {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  white-space: nowrap;
+}
+
+.docs-content .l5e-diag__note {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+/* "on the way in / out" markers for the wrapping middleware shell */
+.docs-content .l5e-diag__inout {
+  margin: 0.3rem 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+/* Narrow screens: stack nodes full width and turn the horizontal stage
+   arrows downward so they keep pointing along the flow. */
+@media (max-width: 560px) {
+  .docs-content .l5e-diag__row > .l5e-diag__node {
+    flex-basis: 100%;
+  }
+  .docs-content .l5e-diag__row > .l5e-diag__arrow {
+    transform: rotate(90deg);
+  }
+}
+
 .docs-content h1 {
   font-size: 2rem;
   margin: 0 0 1rem;

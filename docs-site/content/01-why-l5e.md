@@ -78,6 +78,17 @@ L5E is that. JSX on the server, rendered into a clean HTML body, plus a per-requ
 bundler that only includes assets the blocks that actually rendered registered. Add a
 13th block to the page builder; URLs that don't render it pay nothing.
 
+Why can't a build-time bundler just do this? Tree-shaking is static - it knows which code
+*could* run, not which blocks *this* request renders from *its* data. Try to pick blocks
+dynamically and you trade one problem for another: a variable import like
+`import('../blocks/' + type + '.astro')` makes the bundler pull in *every* candidate block - a
+long-standing, documented Astro limitation
+([withastro/astro#4863](https://github.com/withastro/astro/issues/4863)) - while splitting each
+block into its own chunk pushes the decision to the browser: load the shell, run JS, fetch
+data, discover it needs blocks 7 / 12 / 30, then fetch each chunk, a round-trip at a time.
+Rendering on the server skips all of that - the data is already there, so the exact set is
+known the moment render finishes.
+
 ## The honest tradeoffs
 
 L5E gives up things to keep the output shape simple. Knowing what they are matters
