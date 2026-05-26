@@ -32,6 +32,11 @@ export function MainMenu() {
         </div>
 
         <nav class="main-menu__actions" aria-label="Primary">
+          {showDocsLink ? (
+            <a class="main-menu__link main-menu__link--docs" href={FIRST_DOC_HREF}>
+              <span class="main-menu__link-label">Docs</span>
+            </a>
+          ) : null}
           <button
             type="button"
             class="main-menu__theme"
@@ -68,11 +73,6 @@ export function MainMenu() {
               <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
             </svg>
           </button>
-          {showDocsLink ? (
-            <a class="main-menu__link main-menu__link--docs" href={FIRST_DOC_HREF}>
-              <span class="main-menu__link-label">Docs</span>
-            </a>
-          ) : null}
           <a
             class="main-menu__star"
             href={GITHUB_URL}
