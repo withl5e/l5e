@@ -30,24 +30,25 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d1117;
-    --bg-muted: #161b22;
-    --bg-elevated: #161b22;
-    --fg: #e6edf3;
-    --fg-muted: #8b949e;
-    --fg-subtle: #6e7681;
-    --accent: #58a6ff;
-    --accent-fg: #0d1117;
-    --accent-soft: rgba(88, 166, 255, 0.12);
-    --border: #30363d;
-    --border-strong: #484f58;
-    --code-bg: #1c2128;
-    --code-fg: #e6edf3;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
-    --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.35);
-  }
+/* Dark palette. The inline script in index.html pins data-theme on <html>
+   (from saved choice or OS preference) before first paint, so the toggle and
+   system default both flow through this single selector — no media query. */
+:root[data-theme='dark'] {
+  --bg: #0d1117;
+  --bg-muted: #161b22;
+  --bg-elevated: #161b22;
+  --fg: #e6edf3;
+  --fg-muted: #8b949e;
+  --fg-subtle: #6e7681;
+  --accent: #58a6ff;
+  --accent-fg: #0d1117;
+  --accent-soft: rgba(88, 166, 255, 0.12);
+  --border: #30363d;
+  --border-strong: #484f58;
+  --code-bg: #1c2128;
+  --code-fg: #e6edf3;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.35);
 }
 
 * {

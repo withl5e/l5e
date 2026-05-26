@@ -128,12 +128,10 @@
   flex-direction: column;
 }
 
-@media (prefers-color-scheme: dark) {
-  .search-panel {
-    box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.3),
-      0 18px 50px rgba(0, 0, 0, 0.55);
-  }
+:root[data-theme='dark'] .search-panel {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 18px 50px rgba(0, 0, 0, 0.55);
 }
 
 .search-panel__header {

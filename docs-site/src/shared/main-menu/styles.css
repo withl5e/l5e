@@ -97,6 +97,44 @@
   display: inline;
 }
 
+/* Theme toggle — icon-only ghost button. Shows the moon in light mode and
+   the sun in dark mode (the glyph for the mode you'd switch away from). */
+.main-menu__theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--fg-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease;
+}
+
+.main-menu__theme:hover {
+  background: var(--bg-muted);
+  color: var(--fg);
+}
+
+.main-menu__theme-icon {
+  display: none;
+}
+
+.main-menu__theme-icon--moon {
+  display: block;
+}
+
+:root[data-theme='dark'] .main-menu__theme-icon--moon {
+  display: none;
+}
+
+:root[data-theme='dark'] .main-menu__theme-icon--sun {
+  display: block;
+}
+
 /* GitHub-style "Star" pill — golden accent on the star, subtle bg */
 .main-menu__star {
   display: inline-flex;
@@ -133,10 +171,8 @@
   flex-shrink: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  .main-menu__star-glyph {
-    color: #fbbf24;
-  }
+:root[data-theme='dark'] .main-menu__star-glyph {
+  color: #fbbf24;
 }
 
 /* Right segment — ★ glyph + numeric star count. */

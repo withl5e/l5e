@@ -397,8 +397,8 @@
   color: #b45309;
 }
 
-@media (prefers-color-scheme: dark) {
-  .viz-col__tag { color: #fbbf24; }
+:root[data-theme='dark'] .viz-col__tag {
+  color: #fbbf24;
 }
 
 .viz-col__tag--good {
