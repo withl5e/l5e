@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createContext,
-  defineMiddleware,
-  isLocalsSerializable,
-  sequence,
-  trySerializeLocals,
-} from '../src/middleware';
+import { createContext, defineMiddleware, sequence } from '../src/middleware';
 
 describe('middleware', () => {
   it('defineMiddleware returns the handler unchanged', () => {
@@ -99,15 +93,6 @@ describe('middleware', () => {
     });
 
     expect(await response.text()).toBe('/rewritten');
-  });
-
-  it('serializes only JSON-safe locals', () => {
-    expect(isLocalsSerializable({ user: { id: '1' }, flags: [true, false] })).toBe(true);
-    expect(trySerializeLocals({ ok: true })).toBe('{"ok":true}');
-    expect(isLocalsSerializable({ createdAt: new Date() })).toBe(false);
-    expect(() => trySerializeLocals({ map: new Map() })).toThrow(
-      "The passed value can't be serialized.",
-    );
   });
 
   it('prevents locals reassignment', () => {

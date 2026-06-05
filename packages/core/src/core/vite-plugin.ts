@@ -20,6 +20,15 @@ const VIRTUAL_L5E_ACTIONS = 'virtual:l5e-actions';
 const VIRTUAL_L5E_MIDDLEWARE = 'virtual:l5e-middleware';
 
 /**
+ * Vite's built-in env vars on `import.meta.env`. These are statically replaced
+ * by Vite itself (DEV/PROD/SSR are booleans, MODE/BASE_URL strings), so the SSR
+ * `import.meta.env.* -> process.env.*` rewrite must skip them — otherwise it
+ * clobbers Vite defaults (e.g. `import.meta.env.DEV` would become the undefined
+ * `process.env.DEV`).
+ */
+const VITE_RESERVED_ENV = new Set(['MODE', 'BASE_URL', 'PROD', 'DEV', 'SSR', 'LEGACY']);
+
+/**
  * Recursively scan directory for .tsx and .ts files
  */
 function scanTsFiles(dir: string, fileList: string[] = []): string[] {
@@ -671,6 +680,8 @@ export function coreVite(): Plugin {
         transformedCode = transformedCode.replace(
           /import\.meta\.env\.([a-zA-Z_][a-zA-Z0-9_]*)/g,
           (match, varName) => {
+            // Leave Vite's built-in env vars for Vite to handle.
+            if (VITE_RESERVED_ENV.has(varName)) return match;
             hasChanges = true;
             return `process.env.${varName}`;
           },
@@ -682,6 +693,8 @@ export function coreVite(): Plugin {
         transformedCode = transformedCode.replace(
           /import\.meta\.env\[(['"`])([^'"`]+)\1\]/g,
           (match, quote, varName) => {
+            // Leave Vite's built-in env vars for Vite to handle.
+            if (VITE_RESERVED_ENV.has(varName)) return match;
             hasChanges = true;
             return `process.env[${quote}${varName}${quote}]`;
           },

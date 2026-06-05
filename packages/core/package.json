@@ -90,11 +90,13 @@
   "dependencies": {
     "@floating-ui/dom": "1.7.4",
     "compression": "^1.7.4",
+    "cookie": "^1.1.1",
     "esbuild": "^0.24.2",
     "express": "^4.18.2",
     "path-to-regexp": "^8.4.2",
     "request-ip": "^3.3.0",
     "rollup": "^4.0.0",
+    "serialize-javascript": "^7.0.5",
     "sirv": "^2.0.3"
   },
   "peerDependencies": {
@@ -107,6 +109,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/request-ip": "0.0.41",
+    "@types/serialize-javascript": "^5.0.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.6.3",

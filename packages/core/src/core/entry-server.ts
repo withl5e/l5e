@@ -1,4 +1,5 @@
 /// <reference path="./jsx-types.d.ts" />
+import serialize from 'serialize-javascript';
 import { MetadataRenderer } from '../seo/generateMetadata';
 import type { Metadata } from '../seo/types';
 import {
@@ -323,7 +324,9 @@ export async function render(url: string, requestInfo: RequestInfo = {}): Promis
       // Auto-render schemas vào headRegistry
       const schemas = getSchemas();
       schemas.forEach((schema) => {
-        const schemaJson = JSON.stringify(schema);
+        // serialize-javascript escapes HTML-sensitive chars (<, >, &, U+2028/2029)
+        // so schema values cannot break out of the <script> block (XSS).
+        const schemaJson = serialize(schema, { isJSON: true });
         // Push schema vào headRegistry thông qua Head component
         // Head component chỉ push vào registry, không cần renderJsxToHtmlString
         Head({
@@ -379,13 +382,19 @@ export async function render(url: string, requestInfo: RequestInfo = {}): Promis
         return await renderErrorView(err);
       }
 
-      // For other errors, convert to ServiceUnavailableException
+      // For other (unexpected) errors, convert to ServiceUnavailableException.
+      // Intentional HttpExceptions above keep their developer-authored message;
+      // but an unexpected error's raw message/stack must not leak to the client
+      // in production (it can carry internals, secrets, etc.). Dev keeps detail.
       console.error(`Failed to render:`, err);
-      const serviceError = new ServiceUnavailableException(err.message || 'Internal Server Error', {
-        originalError: err.name,
-        stack: err.stack,
-        timestamp: new Date().toISOString(),
-      });
+      const isProduction = process.env.NODE_ENV === 'production';
+      const serviceError = isProduction
+        ? new ServiceUnavailableException('Internal Server Error')
+        : new ServiceUnavailableException(err.message || 'Internal Server Error', {
+            originalError: err.name,
+            stack: err.stack,
+            timestamp: new Date().toISOString(),
+          });
       return await renderErrorView(serviceError);
     }
   }, requestInfo);

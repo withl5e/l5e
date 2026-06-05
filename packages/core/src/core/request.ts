@@ -1,18 +1,19 @@
+import { parse as parseCookieHeader } from 'cookie';
 import type { Request } from 'express';
 
 export function parseCookies(cookieHeader?: string): Record<string, string> {
   if (!cookieHeader) return {};
 
-  return cookieHeader.split(';').reduce(
-    (cookies, cookie) => {
-      const [name, ...rest] = cookie.split('=');
-      if (name && rest.length > 0) {
-        cookies[name.trim()] = decodeURIComponent(rest.join('=').trim());
-      }
-      return cookies;
-    },
-    {} as Record<string, string>,
-  );
+  // `cookie.parse` decodes values safely (malformed %-sequences fall back to the
+  // raw value instead of throwing) and ignores prototype keys.
+  const parsed = parseCookieHeader(cookieHeader);
+  const cookies: Record<string, string> = {};
+  for (const [name, value] of Object.entries(parsed)) {
+    if (value !== undefined) {
+      cookies[name] = value;
+    }
+  }
+  return cookies;
 }
 
 export function createHeadersFromExpressRequest(req: Request): Headers {

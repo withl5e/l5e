@@ -30,9 +30,7 @@ export { coreVite } from './vite-plugin';
 export {
   createContext,
   defineMiddleware,
-  isLocalsSerializable,
   sequence,
-  trySerializeLocals,
   type CreateContext,
   type MiddlewareContext,
   type MiddlewareHandler,

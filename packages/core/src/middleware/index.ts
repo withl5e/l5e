@@ -72,54 +72,6 @@ export function createContext({
   return context;
 }
 
-export function isLocalsSerializable(value: unknown): boolean {
-  const stack: unknown[] = [value];
-
-  while (stack.length > 0) {
-    const current = stack.pop();
-    const type = typeof current;
-
-    if (current === null || type === 'string' || type === 'number' || type === 'boolean') {
-      continue;
-    }
-
-    if (Array.isArray(current)) {
-      stack.push(...current);
-      continue;
-    }
-
-    if (type === 'object' && isPlainObject(current)) {
-      stack.push(...Object.values(current as Record<string, unknown>));
-      continue;
-    }
-
-    return false;
-  }
-
-  return true;
-}
-
-function isPlainObject(value: unknown): value is object {
-  if (typeof value !== 'object' || value === null) return false;
-
-  const proto = Object.getPrototypeOf(value);
-  if (proto === null) return true;
-
-  let baseProto = proto;
-  while (Object.getPrototypeOf(baseProto) !== null) {
-    baseProto = Object.getPrototypeOf(baseProto);
-  }
-
-  return proto === baseProto;
-}
-
-export function trySerializeLocals(value: unknown): string {
-  if (isLocalsSerializable(value)) {
-    return JSON.stringify(value);
-  }
-  throw new Error("The passed value can't be serialized.");
-}
-
 function stringifyRewritePayload(payload: RewritePayload, currentUrl: URL): string {
   if (payload instanceof Request) {
     return payload.url;

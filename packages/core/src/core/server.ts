@@ -4,10 +4,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import requestIp from 'request-ip';
+import serialize from 'serialize-javascript';
 import type { ViteDevServer } from 'vite';
 import { createContext, type MiddlewareHandler, type RewritePayload } from '../middleware';
 import { bundleCss, bundleScripts, getBundledFile } from './bundler';
 import type { RenderResult, RequestInfo } from './entry-server';
+import { escapeProp } from './render';
 import { createHeadersFromExpressRequest, parseCookies } from './request';
 
 export interface ServerOptions {
@@ -27,15 +29,18 @@ export interface ServerContext {
 /**
  * Apply or replace lang attribute on <html> tag
  */
-function applyHtmlLang(template: string, lang: string): string {
+export function applyHtmlLang(template: string, lang: string): string {
+  // Escape so a loader-supplied lang (possibly derived from user input) cannot
+  // break out of the attribute / <html> tag (XSS). escapeProp handles ", <, >, &.
+  const safeLang = escapeProp(lang);
   return template.replace(/<html\b([^>]*)>/i, (match, attrs) => {
     // Check if lang already exists
     if (/\blang\s*=/i.test(attrs)) {
-      // Replace existing lang value
-      return match.replace(/lang\s*=\s*"[^"]*"/i, `lang="${lang}"`);
+      // Replace existing lang value (function replacer avoids $-pattern issues)
+      return match.replace(/lang\s*=\s*"[^"]*"/i, () => `lang="${safeLang}"`);
     } else {
       // Add lang attribute
-      return `<html lang="${lang}"${attrs}>`;
+      return `<html lang="${safeLang}"${attrs}>`;
     }
   });
 }
@@ -312,7 +317,7 @@ async function createPageResponse({
         }
       }
       if (Object.keys(islandMap).length > 0) {
-        islandRegistryScript = `<script>window.__L5E_ISLANDS__=${JSON.stringify(islandMap)}</script>`;
+        islandRegistryScript = `<script>window.__L5E_ISLANDS__=${serialize(islandMap)}</script>`;
       }
     }
 
@@ -341,7 +346,7 @@ async function createPageResponse({
       for (const island of islandEntries) {
         islandMap[island.key] = `/${island.src}`;
       }
-      islandRegistryScript = `<script>window.__L5E_ISLANDS__=${JSON.stringify(islandMap)}</script>`;
+      islandRegistryScript = `<script>window.__L5E_ISLANDS__=${serialize(islandMap)}</script>`;
     }
   }
 
@@ -463,7 +468,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
           res.send(bundledFile.content);
         } catch (e: any) {
           console.error('[server] Error serving bundled file:', e);
-          res.status(500).end(e.message);
+          res.status(500).end('Internal server error');
         }
       },
     );
@@ -556,6 +561,14 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
       const action = actionModule[actionName];
       if (!action || !action.handler) {
         return res.status(404).send('Action not found');
+      }
+
+      // Enforce the action's declared HTTP method. Previously `app.all` accepted
+      // any method and `action.method` was ignored, so a state-changing POST
+      // action could be triggered via GET (e.g. <img src>) — a CSRF vector.
+      const allowedMethod = (action.method || 'GET').toUpperCase();
+      if (req.method.toUpperCase() !== allowedMethod) {
+        return res.status(405).set('Allow', allowedMethod).send('Method Not Allowed');
       }
 
       // Build RequestInfo (same pattern as HTML handler)
@@ -687,8 +700,9 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
       await sendWebResponse(req, res, response);
     } catch (e: any) {
       vite?.ssrFixStacktrace?.(e);
-      console.log(e.stack);
-      res.status(500).end(e.stack);
+      console.error(e.stack);
+      // Never leak stack traces to the client in production (info disclosure).
+      res.status(500).end(isProduction ? 'Internal Server Error' : e.stack);
     }
   });
 
