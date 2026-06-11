@@ -1,4 +1,5 @@
 import { coreVite } from '@withl5e/l5e/vite-plugin';
+import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
@@ -10,7 +11,12 @@ export default defineConfig({
   esbuild: {
     jsx: 'preserve',
   },
-  plugins: [coreVite()],
+  plugins: [
+    coreVite(),
+    // Scope React's JSX transform to island components only (files under /react/).
+    // l5e's own JSX transform skips /react/ dirs, so the two plugins don't collide.
+    react({ include: [/\.react\.(t|j)sx$/, /[\\/]react[\\/][^/\\]+\.(t|j)sx$/] }),
+  ],
   build: {
     outDir: 'dist/client',
     manifest: true,

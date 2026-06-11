@@ -13,7 +13,11 @@
     "types.d.ts",
     "README.md"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "**/island/runtime.ts",
+    "**/island/runtime.js",
+    "**/*.css"
+  ],
   "exports": {
     ".": {
       "development": "./src/core/index.ts",

@@ -11,9 +11,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@withl5e/l5e": "workspace:*"
+    "@withl5e/l5e": "workspace:*",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
   },
   "devDependencies": {
+    "@types/react": "^19.2.1",
+    "@types/react-dom": "^19.2.1",
+    "@vitejs/plugin-react": "^4.5.2",
     "cross-env": "^7.0.3",
     "tsx": "^4.7.0",
     "typescript": "^5.6.3",

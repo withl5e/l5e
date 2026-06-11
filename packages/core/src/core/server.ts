@@ -356,12 +356,15 @@ async function createPageResponse({
 
   const templateWithLang = rendered.lang ? applyHtmlLang(template, rendered.lang) : template;
 
+  // Replacer fns (not strings) so `$`-sequences in rendered HTML — e.g. an SSR
+  // island body or user text containing "$$" / "$&" — aren't interpreted as
+  // special String.replace replacement patterns.
   const html = rendered.rawHtml
     ? rendered.html || ''
     : templateWithLang
-        .replace(`<!--app-head-->`, (rendered.head ?? '') + extraHead + cssHtml)
-        .replace(`<!--app-html-->`, rendered.html ?? '')
-        .replace(`<!--app-scripts-->`, scriptsHtml);
+        .replace(`<!--app-head-->`, () => (rendered.head ?? '') + extraHead + cssHtml)
+        .replace(`<!--app-html-->`, () => rendered.html ?? '')
+        .replace(`<!--app-scripts-->`, () => scriptsHtml);
 
   const headers = new Headers({
     'Content-Type': 'text/html',
