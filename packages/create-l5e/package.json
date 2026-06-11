@@ -1,6 +1,6 @@
 {
   "name": "create-l5e",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Create an L5E app from the official starter template.",
   "type": "module",
   "license": "MIT",

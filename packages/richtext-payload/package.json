@@ -1,6 +1,6 @@
 {
   "name": "@withl5e/richtext-payload",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Payload Lexical rich text renderer adapter for L5E.",
   "type": "module",
   "license": "MIT",
@@ -16,12 +16,10 @@
   "exports": {
     ".": {
       "types": "./src/richtext-render/index.tsx",
-      "development": "./index.ts",
       "default": "./dist/index.js"
     },
     "./stringToLexical": {
       "types": "./src/richtext-render/utils/stringToLexical.ts",
-      "development": "./src/richtext-render/utils/stringToLexical.ts",
       "default": "./dist/stringToLexical.js"
     }
   },
