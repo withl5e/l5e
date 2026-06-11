@@ -19,6 +19,7 @@ export interface IslandMeta {
   props: Record<string, any>;
   mount: string; // Strategy name
   mountOpts?: string; // Options passed to strategy function
+  ssr?: boolean; // Server-rendered → hydrate instead of fresh client mount
 }
 
 export interface IslandEntry {

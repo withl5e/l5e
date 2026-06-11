@@ -77,6 +77,7 @@ function discoverIslands(): IslandMeta[] {
     props: JSON.parse(el.getAttribute('data-island-props') || '{}'),
     mount: el.getAttribute('data-island-mount') || 'load',
     mountOpts: el.getAttribute('data-island-opts') || undefined,
+    ssr: el.hasAttribute('data-island-ssr'),
   }));
 }
 
@@ -97,7 +98,7 @@ function createMountFn(island: IslandMeta): () => Promise<void> {
     }
 
     try {
-      const [{ createRoot }, { createElement }, mod] = await Promise.all([
+      const [reactDomClient, { createElement }, mod] = await Promise.all([
         import('react-dom/client'),
         import('react'),
         import(/* @vite-ignore */ url),
@@ -109,8 +110,14 @@ function createMountFn(island: IslandMeta): () => Promise<void> {
         return;
       }
 
-      const root = createRoot(island.element);
-      root.render(createElement(Component, island.props));
+      if (island.ssr) {
+        // Server already rendered this component into the element → hydrate it.
+        reactDomClient.hydrateRoot(island.element, createElement(Component, island.props));
+      } else {
+        // Client-only mount (default): fresh render into an empty placeholder.
+        const root = reactDomClient.createRoot(island.element);
+        root.render(createElement(Component, island.props));
+      }
     } catch (error) {
       console.error(`[l5e-island] Failed to mount "${island.registryKey}":`, error);
     }

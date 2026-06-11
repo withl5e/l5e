@@ -18,6 +18,7 @@ import {
   getHeadContent,
   getIslandEntries,
   getSchemas,
+  getSsrIslands,
   jsxFactory as h,
   Head,
   pushMetadata,
@@ -34,6 +35,69 @@ import routeHandler from 'virtual:l5e-route';
 import { globalLoader } from 'virtual:l5e-global-loader';
 // @ts-ignore - Virtual modules provided by Vite plugin
 export { loadMiddleware } from 'virtual:l5e-middleware';
+// @ts-ignore - Virtual modules provided by Vite plugin
+import { islandModules } from 'virtual:l5e-islands';
+
+/**
+ * Fill `ssr` island placeholders with server-rendered HTML.
+ *
+ * During the synchronous render pass, each `<ClientIsland ssr>` emits a unique
+ * token (as `<!--token-->` body + `data-island-ssr="token"`). Here — after the
+ * pass — we can `await import()` the actual React component and renderToString it,
+ * then string-replace the token. Only islands present on this page are imported.
+ *
+ * On failure we strip both the token and the `data-island-ssr` attribute so the
+ * client cleanly falls back to a client-only mount (no hydration mismatch).
+ */
+async function fillSsrIslands(htmlBody: string): Promise<string> {
+  const pending = getSsrIslands();
+  if (pending.length === 0) return htmlBody;
+
+  let renderToString: (el: any) => string;
+  let createElement: (type: any, props: any) => any;
+  try {
+    [{ renderToString }, { createElement }] = await Promise.all([
+      import('react-dom/server'),
+      import('react'),
+    ]);
+  } catch (err) {
+    console.error('[l5e-island] SSR requires react-dom/server + react:', err);
+    // Strip every pending token/attr → client-only fallback for all.
+    for (const island of pending) {
+      htmlBody = htmlBody
+        .replace(`<!--${island.token}-->`, '')
+        .replace(` data-island-ssr="${island.token}"`, '');
+    }
+    return htmlBody;
+  }
+
+  for (const island of pending) {
+    try {
+      const loader = islandModules['/' + island.src];
+      if (!loader) {
+        throw new Error(`island module not found in glob: /${island.src}`);
+      }
+      const mod: any = await loader();
+      const Component = mod[island.name] ?? mod.default;
+      if (!Component) {
+        throw new Error(`no export "${island.name}" or default in /${island.src}`);
+      }
+      const out = renderToString(createElement(Component, island.props));
+      // Replacer fn (not a string) so `$`-sequences in `out` (e.g. "$&", "$$")
+      // aren't interpreted as special replacement patterns.
+      htmlBody = htmlBody
+        .replace(`<!--${island.token}-->`, () => out)
+        .replace(`data-island-ssr="${island.token}"`, 'data-island-ssr="1"');
+    } catch (err) {
+      console.error(`[l5e-island] Failed to SSR island "${island.name}":`, err);
+      htmlBody = htmlBody
+        .replace(`<!--${island.token}-->`, '')
+        .replace(` data-island-ssr="${island.token}"`, '');
+    }
+  }
+
+  return htmlBody;
+}
 
 export interface RawResponse {
   body: string | Buffer;
@@ -339,7 +403,9 @@ export async function render(url: string, requestInfo: RequestInfo = {}): Promis
       });
 
       // Render component (có thể có Head components khác)
-      const htmlBody = renderJsxToHtmlString(h(Component, props));
+      let htmlBody = renderJsxToHtmlString(h(Component, props));
+      // Fill any opt-in `ssr` island placeholders with server-rendered React HTML.
+      htmlBody = await fillSsrIslands(htmlBody);
       const clientEntries = getClientJsEntries();
       const cssEntries = getCssEntries();
       const islandEntries = getIslandEntries();

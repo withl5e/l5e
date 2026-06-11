@@ -16,6 +16,7 @@ const VIRTUAL_L5E_ROUTE = 'virtual:l5e-route';
 const VIRTUAL_L5E_SSR_ENTRY = 'virtual:l5e-ssr-entry';
 const VIRTUAL_L5E_GLOBAL_LOADER = 'virtual:l5e-global-loader';
 const VIRTUAL_L5E_ISLAND_STRATEGIES = 'virtual:l5e-island-strategies';
+const VIRTUAL_L5E_ISLANDS = 'virtual:l5e-islands';
 const VIRTUAL_L5E_ACTIONS = 'virtual:l5e-actions';
 const VIRTUAL_L5E_MIDDLEWARE = 'virtual:l5e-middleware';
 
@@ -553,6 +554,9 @@ export function coreVite(): Plugin {
       if (id === VIRTUAL_L5E_ISLAND_STRATEGIES) {
         return '\0' + VIRTUAL_L5E_ISLAND_STRATEGIES;
       }
+      if (id === VIRTUAL_L5E_ISLANDS) {
+        return '\0' + VIRTUAL_L5E_ISLANDS;
+      }
       if (id === VIRTUAL_L5E_ACTIONS) {
         return '\0' + VIRTUAL_L5E_ACTIONS;
       }
@@ -770,6 +774,14 @@ export async function loadMiddleware() {
   return mod.onRequest;
 }
 `;
+      }
+
+      // Virtual module: l5e-islands
+      // Lazy glob of all React island components so the SSR entry can import a
+      // component by its __src path and renderToString() it. Non-eager → only
+      // islands actually present on a page (with ssr) get imported at runtime.
+      if (id === '\0' + VIRTUAL_L5E_ISLANDS) {
+        return `export const islandModules = import.meta.glob('/src/**/react/*.{tsx,jsx}');`;
       }
 
       // Virtual module: l5e-island-strategies

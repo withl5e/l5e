@@ -65,10 +65,23 @@ interface IslandEntry {
   name: string; // "Counter" — export name
 }
 
+/**
+ * A pending server-side render request for an `ssr` island.
+ * Collected during the synchronous render pass and filled in afterwards by
+ * entry-server (which can `await import()` the component + call renderToString).
+ */
+interface SsrIslandEntry {
+  token: string; // unique placeholder token embedded in the HTML body
+  src: string; // "src/views/.../Counter.tsx" — manifest-compatible path (no leading slash)
+  name: string; // "Counter" — export name
+  props: Record<string, any>;
+}
+
 interface RenderContext {
   clientJsRegistry: Array<{ path: string; from: string }>;
   cssRegistry: Array<{ path: string; from: string }>;
   islandRegistry: IslandEntry[];
+  ssrIslands: SsrIslandEntry[];
   cacheTags: Set<string>;
   headRegistry: HeadEntry[]; // Thay vì JSXChild[]
   metadataStack: Metadata[]; // Stack để track metadata hierarchy
@@ -85,6 +98,7 @@ function createRequestContext(requestInfo: RequestInfo): RenderContext {
     clientJsRegistry: [],
     cssRegistry: [],
     islandRegistry: [],
+    ssrIslands: [],
     cacheTags: new Set(),
     headRegistry: [],
     metadataStack: [],
@@ -117,6 +131,25 @@ export function getIslandEntries(): IslandEntry[] {
   const context = renderStore.getStore();
   if (!context) return [];
   return context.islandRegistry.slice();
+}
+
+/**
+ * Register a pending SSR island render. Returns a unique placeholder token that
+ * the caller embeds (as raw HTML) in the island's body. entry-server replaces
+ * the token with the server-rendered component HTML after the sync render pass.
+ */
+export function registerSsrIsland(src: string, name: string, props: Record<string, any>): string {
+  const renderContext = renderStore.getStore();
+  if (!renderContext) return '';
+  const token = `__L5E_SSR_${renderContext.ssrIslands.length}__`;
+  renderContext.ssrIslands.push({ token, src, name, props });
+  return token;
+}
+
+export function getSsrIslands(): SsrIslandEntry[] {
+  const context = renderStore.getStore();
+  if (!context) return [];
+  return context.ssrIslands.slice();
 }
 
 export function useCss(path: string): string {
