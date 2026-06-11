@@ -20,82 +20,66 @@
   ],
   "exports": {
     ".": {
-      "development": "./src/core/index.ts",
       "types": "./src/core/index.ts",
       "default": "./dist/index.js"
     },
     "./jsx-runtime": {
-      "development": "./src/core/jsx-runtime.ts",
       "types": "./src/core/jsx-runtime.ts",
       "default": "./dist/jsx-runtime.js"
     },
     "./vite-plugin": {
-      "development": "./src/core/vite-plugin.ts",
       "types": "./src/core/vite-plugin.ts",
       "default": "./dist/vite-plugin.js"
     },
     "./server": {
-      "development": "./src/core/server.ts",
       "types": "./src/core/server.ts",
       "default": "./dist/server.js"
     },
     "./entry-server": {
-      "development": "./src/core/entry-server.ts",
       "types": "./src/core/entry-server.d.ts",
       "default": "./dist/entry-server.js"
     },
     "./middleware": {
-      "development": "./src/middleware/index.ts",
       "types": "./src/middleware/index.ts",
       "default": "./dist/middleware.js"
     },
     "./tooltip": {
-      "development": "./src/tooltip/index.ts",
       "types": "./src/tooltip/index.ts",
       "default": "./dist/tooltip.js"
     },
     "./jsx-types": {
-      "development": "./src/core/jsx-types.d.ts",
       "types": "./src/core/jsx-types.d.ts",
       "default": "./src/core/jsx-types.d.ts"
     },
     "./seo": {
-      "development": "./src/seo/index.ts",
       "types": "./src/seo/index.ts",
       "default": "./dist/seo.js"
     },
     "./swap": {
-      "development": "./src/swap/index.ts",
       "types": "./src/swap/index.ts",
       "default": "./dist/swap.js"
     },
     "./swap/server": {
-      "development": "./src/swap/server.ts",
       "types": "./src/swap/server.ts",
       "default": "./dist/swap/server.js"
     },
     "./action": {
-      "development": "./src/action/index.ts",
       "types": "./src/action/index.ts",
       "default": "./dist/action.js"
     },
     "./island": {
-      "development": "./src/island/index.ts",
       "types": "./src/island/index.ts",
       "default": "./dist/island.js"
     },
     "./island/client": {
-      "development": "./src/island/client.ts",
       "types": "./src/island/client.ts",
       "default": "./dist/island/client.js"
     },
     "./island/runtime": {
-      "development": "./src/island/runtime.ts",
       "types": "./src/island/runtime.ts",
       "default": "./dist/island/runtime.js"
     },
     "./router": {
-      "development": "./src/router/index.ts",
       "types": "./src/router/index.ts",
       "default": "./dist/router.js"
     }
