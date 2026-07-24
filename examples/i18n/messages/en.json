@@ -11,5 +11,5 @@
   "site_description": "A minimal L5E app demonstrating locale detection via Paraglide JS.",
   "ssr_island_label": "React island (server-rendered + hydrated)",
   "csr_island_label": "React island (client-only mount)",
-  "island_count_label": "Count: {count} — locale prop: {locale}"
+  "island_count_label": "Count: {count} — locale (client getLocale(), no prop): {locale}"
 }

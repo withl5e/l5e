@@ -159,14 +159,17 @@ test.describe('i18n: fromFetchMiddleware + Paraglide JS (real browser)', () => {
   }) => {
     await page.goto('/vi/');
 
-    // Server-rendered value, before any client JS could have run.
+    // Server-rendered value, before any client JS could have run. The
+    // component calls getLocale() itself — no `locale` prop threaded in —
+    // and still resolves 'vi' server-side (via requestInfo/ALS) and
+    // client-side (via Paraglide's own window.location-based strategy).
     const ssrCount = page.getByTestId('ssr-island-count');
-    await expect(ssrCount).toHaveText('Đếm: 5 — locale truyền qua prop: vi');
+    await expect(ssrCount).toHaveText('Đếm: 5 — locale (getLocale() ở client, không qua prop): vi');
 
     // Hydration wires up the click handler onto the *same* server-rendered
     // DOM (not a fresh client-only render) — count continues from 5, not 0.
     await page.locator('.ssr-island button').click();
-    await expect(ssrCount).toHaveText('Đếm: 6 — locale truyền qua prop: vi');
+    await expect(ssrCount).toHaveText('Đếm: 6 — locale (getLocale() ở client, không qua prop): vi');
   });
 
   test('React CSR island: mounts fresh at count 0 (client-only), locale-aware', async ({
@@ -175,10 +178,10 @@ test.describe('i18n: fromFetchMiddleware + Paraglide JS (real browser)', () => {
     await page.goto('/');
 
     const csrCount = page.getByTestId('csr-island-count');
-    await expect(csrCount).toHaveText('Count: 0 — locale prop: en');
+    await expect(csrCount).toHaveText('Count: 0 — locale (client getLocale(), no prop): en');
 
     await page.locator('.csr-island button').click();
-    await expect(csrCount).toHaveText('Count: 1 — locale prop: en');
+    await expect(csrCount).toHaveText('Count: 1 — locale (client getLocale(), no prop): en');
   });
 
   test('concurrent requests for different locales do not leak into each other', async ({

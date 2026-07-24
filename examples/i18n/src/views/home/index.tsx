@@ -65,20 +65,21 @@ export default function HomePage({ pathname }: HomeLoaderData) {
 
           <section aria-label="React island demo">
             <h2>{m.ssr_island_label()}</h2>
-            {/* React runs in the browser with no AsyncLocalStorage, so locale
-                has to be passed as an explicit prop here — the one deliberate
-                exception to ambient getLocale() in this whole demo. */}
+            {/* No `locale` prop — LocaleCounter calls getLocale() itself.
+                Paraglide's client-side getLocale() reads window.location
+                (the 'url' strategy), not AsyncLocalStorage, so it resolves
+                to the same locale the server rendered with on its own. */}
             <ClientIsland
               from="./react/LocaleCounter"
               ssr
-              props={{ locale, initCount: 5, testId: 'ssr-island-count' }}
+              props={{ initCount: 5, testId: 'ssr-island-count' }}
               class="ssr-island"
             />
 
             <h2>{m.csr_island_label()}</h2>
             <ClientIsland
               from="./react/LocaleCounter"
-              props={{ locale, initCount: 0, testId: 'csr-island-count' }}
+              props={{ initCount: 0, testId: 'csr-island-count' }}
               class="csr-island"
             />
           </section>

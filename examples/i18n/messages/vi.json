@@ -11,5 +11,5 @@
   "site_description": "Một ứng dụng L5E tối giản minh hoạ nhận diện locale qua Paraglide JS.",
   "ssr_island_label": "React island (render ở server + hydrate)",
   "csr_island_label": "React island (chỉ mount ở client)",
-  "island_count_label": "Đếm: {count} — locale truyền qua prop: {locale}"
+  "island_count_label": "Đếm: {count} — locale (getLocale() ở client, không qua prop): {locale}"
 }
