@@ -1,0 +1,15 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "greeting": "Hello from L5E!",
+  "language_name": "English",
+  "switch_language": "Switch language",
+  "nested_badge_label": "Locale seen deep in the tree (no prop-drilling): {locale}",
+  "action_button_label": "Call server action",
+  "action_result_label": "Server action responded in locale: {locale}",
+  "tooltip_trigger_label": "Hover or tap me (tooltip fragment route)",
+  "tooltip_content_label": "Tooltip fragment rendered in locale: {locale}",
+  "site_description": "A minimal L5E app demonstrating locale detection via Paraglide JS.",
+  "ssr_island_label": "React island (server-rendered + hydrated)",
+  "csr_island_label": "React island (client-only mount)",
+  "island_count_label": "Count: {count} — locale prop: {locale}"
+}

@@ -90,6 +90,9 @@ const detectLocale = defineMiddleware((ctx, next) => {
 });
 ```
 
+For real locale detection (URL prefixes, cookies, redirects), don't hand-roll this — bridge
+in a library like Paraglide JS with `fromFetchMiddleware` instead. See [[27-i18n]].
+
 Then in any loader:
 
 ```ts

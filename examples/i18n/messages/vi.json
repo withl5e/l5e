@@ -1,0 +1,15 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "greeting": "Xin chào từ L5E!",
+  "language_name": "Tiếng Việt",
+  "switch_language": "Đổi ngôn ngữ",
+  "nested_badge_label": "Locale đọc được sâu trong cây component (không cần truyền prop): {locale}",
+  "action_button_label": "Gọi server action",
+  "action_result_label": "Server action trả về đúng locale: {locale}",
+  "tooltip_trigger_label": "Rê chuột hoặc chạm vào đây (tooltip fragment route)",
+  "tooltip_content_label": "Fragment tooltip render đúng locale: {locale}",
+  "site_description": "Một ứng dụng L5E tối giản minh hoạ nhận diện locale qua Paraglide JS.",
+  "ssr_island_label": "React island (render ở server + hydrate)",
+  "csr_island_label": "React island (chỉ mount ở client)",
+  "island_count_label": "Đếm: {count} — locale truyền qua prop: {locale}"
+}

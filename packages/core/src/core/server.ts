@@ -574,24 +574,22 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
         return res.status(405).set('Allow', allowedMethod).send('Method Not Allowed');
       }
 
-      // Build RequestInfo (same pattern as HTML handler)
-      const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-      const urlObject = new URL(fullUrl);
-
-      const requestInfo = {
-        url: urlObject,
-        path: req.originalUrl,
-        pathname: urlObject.pathname,
-        method: req.method,
-        headers: req.headers,
-        cookies: parseCookies(req.headers.cookie as string),
-        query: req.query || {},
-        body: req.body,
-        ip: requestIp.getClientIp(req),
-      };
-
-      // Import render utilities from entry-server (bundled in SSR build)
+      // Run the request through the middleware chain first — same as the HTML
+      // handler — so `locals` (locale, country, preview flags, ...) is
+      // populated for actions too. Previously this endpoint built its own
+      // bare `requestInfo` and never invoked middleware at all, so `locals`
+      // (and thus `getLocale()`) was always empty inside an action handler.
+      //
+      // Crucially, the action must run *inside* the `next` callback passed to
+      // the middleware — not after `await`ing the middleware call — because a
+      // middleware like `fromFetchMiddleware(paraglideMiddleware)` calls
+      // `next()` synchronously inside a library-owned `AsyncLocalStorage.run()`
+      // scope. Running the action afterward, once that scope has already
+      // closed, would silently lose the library's own ambient `getLocale()`.
       const entryServerPath = path.join(root, './dist/server/entry-server.js');
+      const entryServerModule: EntryServerModule = isProduction
+        ? await import(pathToFileURL(entryServerPath).href)
+        : await vite!.ssrLoadModule('@withl5e/l5e/entry-server');
       const { runInRenderContext } = await (isProduction
         ? import(pathToFileURL(entryServerPath).href)
         : vite!.ssrLoadModule('@withl5e/l5e/jsx-runtime'));
@@ -599,17 +597,42 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
         ? import(pathToFileURL(entryServerPath).href)
         : vite!.ssrLoadModule('@withl5e/l5e'));
 
-      // Run action handler in render context (needed for JSX)
-      const html = await runInRenderContext(
-        async () => {
-          const jsx = await action.handler(requestInfo);
-          return renderJsxToHtmlString(jsx);
-        },
-        requestInfo,
-        modulePath,
-      );
+      const locals: Record<string, unknown> = {};
+      const initialRequest = createWebRequestFromExpress(req);
+      const middlewareContext = createContext({
+        request: initialRequest,
+        locals,
+        clientAddress: requestIp.getClientIp(req) ?? undefined,
+      });
 
-      res.set('Content-Type', 'text/html').send(html);
+      const loadedMiddleware = await entryServerModule.loadMiddleware?.();
+      const middlewareHandler: MiddlewareHandler =
+        typeof loadedMiddleware === 'function' ? loadedMiddleware : (_ctx, dummyNext) => dummyNext();
+
+      // If middleware short-circuits (returns its own Response — a redirect, a
+      // 403, ...) instead of calling `next`, this callback never runs and that
+      // response wins, same as it would for a page request.
+      const response = await middlewareHandler(middlewareContext, async (payload) => {
+        const nextRequest = createRewriteRequest(payload, middlewareContext.request, middlewareContext.url);
+        const requestInfo = {
+          ...createRequestInfo(req, nextRequest, base, locals),
+          path: req.originalUrl,
+          body: req.body,
+        };
+
+        const html = await runInRenderContext(
+          async () => {
+            const jsx = await action.handler(requestInfo);
+            return renderJsxToHtmlString(jsx);
+          },
+          requestInfo,
+          modulePath,
+        );
+
+        return new Response(html, { headers: { 'Content-Type': 'text/html' } });
+      });
+
+      await sendWebResponse(req, res, response);
     } catch (e: any) {
       vite?.ssrFixStacktrace?.(e);
       console.error('[l5e] Action error:', e.stack || e);

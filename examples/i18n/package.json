@@ -1,0 +1,31 @@
+{
+  "name": "l5e-i18n-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "i18n:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --emit-ts-declarations",
+    "predev": "npm run i18n:compile",
+    "dev": "tsx server.ts",
+    "prebuild": "npm run i18n:compile",
+    "build": "vite build && vite build --ssr src/entry-server.ts --outDir dist/server && vite build --ssr server.ts --outDir dist --emptyOutDir false",
+    "start": "cross-env NODE_ENV=production node dist/server.js",
+    "preview": "npm run build && npm run start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@inlang/paraglide-js": "^2.22.0",
+    "@withl5e/l5e": "workspace:*",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.1",
+    "@types/react-dom": "^19.2.1",
+    "@vitejs/plugin-react": "^4.5.2",
+    "cross-env": "^7.0.3",
+    "tsx": "^4.7.0",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.5"
+  }
+}

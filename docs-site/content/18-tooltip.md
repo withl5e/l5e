@@ -10,3 +10,6 @@ order: 18
 - Import from `@withl5e/l5e/tooltip`; mount once from a client script.
 - HTML-driven: add `data-tooltip="..."` (or a target selector) to any element.
 - Lazy-positioned with `@floating-ui/dom`; zero per-element setup in the SSR HTML.
+- Optional `data-tooltip-base="/vi"` prepends a prefix to the `/tooltip/:type/:id` fetch —
+  lets a CDN cache each locale (or any other URL-scoped variant) as a distinct URL instead
+  of one URL that varies by cookie. See [[27-i18n]].

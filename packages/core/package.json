@@ -82,6 +82,10 @@
     "./router": {
       "types": "./src/router/index.ts",
       "default": "./dist/router.js"
+    },
+    "./i18n": {
+      "types": "./src/i18n/index.ts",
+      "default": "./dist/i18n.js"
     }
   },
   "scripts": {

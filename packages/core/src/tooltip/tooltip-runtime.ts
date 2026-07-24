@@ -10,8 +10,22 @@ type TooltipHost = HTMLElement & {
     tooltipType?: string;
     tooltipPlacement?: Placement;
     href?: string;
+    /**
+     * Optional path prefix prepended to the `/tooltip/:type/:id` fetch, e.g.
+     * `/vi` for a localized page. Lets an app serve a distinct, CDN-cacheable
+     * tooltip response per locale (or any other URL-scoped variant) without
+     * the tooltip system knowing anything about locales itself — the SSR view
+     * that renders the trigger just sets this from whatever it already knows
+     * (e.g. `getLocale()`).
+     */
+    tooltipBase?: string;
   };
 };
+
+function tooltipUrl(host: TooltipHost): string {
+  const { tooltipId: id, tooltipType: type, tooltipBase } = host.dataset;
+  return `${tooltipBase ?? ''}/tooltip/${type}/${id}`;
+}
 
 export async function showTooltip(host: TooltipHost): Promise<void> {
   /*
@@ -51,8 +65,7 @@ export async function showTooltip(host: TooltipHost): Promise<void> {
 
   // --- Fetch nội dung từ server ---
   try {
-    const { tooltipId: id, tooltipType: type } = host.dataset;
-    const html = await fetch(`/tooltip/${type}/${id}`, {
+    const html = await fetch(tooltipUrl(host), {
       headers: { Accept: 'text/html' },
     }).then((r) => r.text());
 
@@ -94,8 +107,7 @@ export async function showTooltipMobile(host: TooltipHost): Promise<void> {
   });
 
   try {
-    const { tooltipId: id, tooltipType: type } = host.dataset;
-    const html = await fetch(`/tooltip/${type}/${id}`, {
+    const html = await fetch(tooltipUrl(host), {
       headers: { Accept: 'text/html' },
     }).then((r) => r.text());
 
