@@ -221,6 +221,46 @@ describe('loader-driven SEO is XSS-safe (regression for the JSON-LD bug)', () =>
   });
 });
 
+describe('generateMetadata: alternateLocales (hreflang)', () => {
+  it('renders one <link rel="alternate" hreflang> per entry, keyed by BCP-47 tag', async () => {
+    mocks.routeHandler = () => 'about';
+    registerView('about', () => <h1>About</h1>, {
+      generateMetadata: () => ({
+        alternateLocales: {
+          en: 'https://example.com/en/about',
+          vi: 'https://example.com/about',
+          'x-default': 'https://example.com/about',
+        },
+      }),
+    });
+
+    const result = await render('/about', makeRequest('/about'));
+    const head = result.head ?? '';
+
+    expect(head).toContain(
+      '<link rel="alternate" hreflang="en" href="https://example.com/en/about" />',
+    );
+    expect(head).toContain(
+      '<link rel="alternate" hreflang="vi" href="https://example.com/about" />',
+    );
+    expect(head).toContain(
+      '<link rel="alternate" hreflang="x-default" href="https://example.com/about" />',
+    );
+  });
+
+  it('omits alternate links entirely when alternateLocales is not set', async () => {
+    mocks.routeHandler = () => 'home';
+    registerView('home', () => <h1>Home</h1>, {
+      generateMetadata: () => ({ title: 'Home' }),
+    });
+
+    const result = await render('/', makeRequest('/'));
+    const head = result.head ?? '';
+
+    expect(head).not.toContain('hreflang');
+  });
+});
+
 describe('error view info disclosure (#4)', () => {
   function withNodeEnv(value: string, fn: () => Promise<void>): Promise<void> {
     const prev = process.env.NODE_ENV;

@@ -12,6 +12,22 @@ export interface Metadata {
   // URL and canonical
   canonical?: string;
 
+  /**
+   * `<link rel="alternate" hreflang="...">` tags for a multi-language page —
+   * tells search engines which URL serves each locale, so they index the
+   * right variant per visitor instead of treating them as duplicate content.
+   * Keys are BCP-47 language tags (or `x-default` for the fallback), values
+   * are absolute URLs.
+   *
+   * @example
+   *   alternateLocales: {
+   *     en: 'https://example.com/en/about',
+   *     vi: 'https://example.com/about',
+   *     'x-default': 'https://example.com/about',
+   *   }
+   */
+  alternateLocales?: Record<string, string>;
+
   // Robots and indexing
   robots?:
     | string

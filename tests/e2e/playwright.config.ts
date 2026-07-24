@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = 5174;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
-const I18N_PORT = 5177;
+const I18N_PORT = 5179;
 export const I18N_BASE_URL = `http://127.0.0.1:${I18N_PORT}`;
 
 export default defineConfig({

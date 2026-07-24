@@ -460,6 +460,7 @@ declare global {
         media?: string;
         sizes?: string;
         crossorigin?: string;
+        hreflang?: string;
       };
       style: HTMLAttributes & { type?: string; media?: string };
       script: HTMLAttributes & {

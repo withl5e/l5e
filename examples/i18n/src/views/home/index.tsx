@@ -1,19 +1,12 @@
 import { Fragment, useClientJs } from '@withl5e/l5e/jsx-runtime';
 import { ClientIsland } from '@withl5e/l5e/island';
 import { getLocale, locales, localizeHref } from '~/paraglide/runtime.js';
-import type { Locale } from '~/paraglide/runtime.js';
 import { m } from '~/paraglide/messages.js';
 import { LocaleBadge } from '~/components/LocaleBadge';
 
 import type { HomeLoaderData } from './loader';
 
 const LOCALE_LABELS: Record<string, string> = { en: 'English', vi: 'Tiếng Việt' };
-
-/** '' for the base locale, '/vi' for others — same scheme as page URLs. */
-function tooltipBasePath(locale: Locale): string {
-  const localizedRoot = localizeHref('/', { locale });
-  return localizedRoot === '/' ? '' : localizedRoot.replace(/\/$/, '');
-}
 
 export default function HomePage({ pathname }: HomeLoaderData) {
   useClientJs('/src/views/home/client.ts');
@@ -57,13 +50,12 @@ export default function HomePage({ pathname }: HomeLoaderData) {
           </section>
 
           <section aria-label="Tooltip demo">
-            {/* data-tooltip-base makes the fetch go to /tooltip/... (base
-                locale) or /vi/tooltip/... — a distinct, CDN-cacheable URL per
-                locale, resolved via the same 'url' strategy as any page. */}
+            {/* No per-element wiring — configureTooltip('auto') in
+                src/client.global.ts makes every tooltip fetch in the app
+                infer its locale prefix from <html lang> + the current URL. */}
             <span
               data-tooltip-id="1"
               data-tooltip-type="demo"
-              data-tooltip-base={tooltipBasePath(locale)}
               data-testid="tooltip-trigger"
               tabindex={0}
             >

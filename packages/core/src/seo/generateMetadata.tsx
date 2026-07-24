@@ -194,12 +194,13 @@ export function MetadataRenderer({ metadata }: { metadata?: Metadata }) {
         </Head>
       )}
 
-      {/* High priority: title, description, canonical, prev/next */}
+      {/* High priority: title, description, canonical, prev/next, hreflang alternates */}
       {(title ||
         resolvedMetadata.description ||
         resolvedMetadata.canonical ||
         resolvedMetadata.prev ||
-        resolvedMetadata.next) && (
+        resolvedMetadata.next ||
+        resolvedMetadata.alternateLocales) && (
         <Head priority={HEAD_PRIORITY.HIGH}>
           {title && <title>{title}</title>}
           {resolvedMetadata.description && (
@@ -208,6 +209,10 @@ export function MetadataRenderer({ metadata }: { metadata?: Metadata }) {
           {resolvedMetadata.canonical && <link rel="canonical" href={resolvedMetadata.canonical} />}
           {resolvedMetadata.prev && <link rel="prev" href={resolvedMetadata.prev} />}
           {resolvedMetadata.next && <link rel="next" href={resolvedMetadata.next} />}
+          {resolvedMetadata.alternateLocales &&
+            Object.entries(resolvedMetadata.alternateLocales).map(([hreflang, href]) => (
+              <link rel="alternate" hreflang={hreflang} href={href} />
+            ))}
         </Head>
       )}
 

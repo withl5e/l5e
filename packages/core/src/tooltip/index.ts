@@ -1,2 +1,3 @@
 export { initTooltips, setupTooltipObserver } from './tooltip-loader';
-export { showTooltip, showTooltipMobile } from './tooltip-runtime';
+export { configureTooltip, showTooltip, showTooltipMobile } from './tooltip-runtime';
+export type { TooltipUrlContext, TooltipUrlStrategy } from './tooltip-runtime';
