@@ -4,7 +4,6 @@ dist
 .turbo
 .vite
 .l5e-temp
-.temp-bundle
 coverage
 *.log
 .env

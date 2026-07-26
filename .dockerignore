@@ -5,7 +5,6 @@ node_modules
 **/.turbo
 **/.pnpm-store
 **/.l5e-temp
-**/.temp-bundle
 **/.pack
 
 # Editor / OS

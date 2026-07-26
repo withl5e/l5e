@@ -77,8 +77,16 @@ Any `HttpException` thrown in the chain above jumps to the `_error` view
 
 Once the view has rendered, the framework knows the exact set of CSS files and client
 scripts the response needs — they're sitting in the per-request registries. It runs
-`bundleScripts(mappedScripts, root, distClientDir)` and `bundleCss(...)` to merge those
+`bundleScripts(mappedScripts, distClientDir)` and `bundleCss(...)` to merge those
 entries into one hashed chunk each, served from an in-memory map.
+
+Because this runs on the request path, concurrent requests can ask for the same chunk
+before it exists. Each distinct entry set gets exactly one Rollup run, which every
+waiting request shares; a run that fails is not cached, so the next request retries.
+Nothing is written to disk along the way — the Rollup entry is a virtual module, and
+the finished chunk lives only in the in-memory map. A bundle URL the current process
+never built (a stale link from an earlier process, say) has no file to fall back to and
+returns 404.
 
 <div class="l5e-diag" role="img" aria-label="Per-request asset collection: hooks push into AsyncLocalStorage registries, the runtime merges only those entries into hashed chunks, and a process-wide cache reuses chunks across pages">
   <div class="l5e-diag__row">
@@ -215,5 +223,5 @@ returned HTML fragment is what [[18-swap-and-action]] swaps into the DOM.
 | Asset delivery | Vite middleware (HMR, transforms) | sirv static + in-memory bundle map |
 | `Cache-Control` | Not emitted | Emitted from loader `maxAge`/`sMaxAge`/`swr` |
 | `Cache-Tag` | Always emitted as `global,…` | Same, but non-`global` tags are hashed (`global,1u7gb,…`) |
-| Bundling | Off — Vite serves each entry | On — esbuild merges per request |
+| Bundling | Off — Vite serves each entry | On — Rollup merges per request |
 | Action registry | Read from `virtual:l5e-actions` | Read from `dist/server/action-registry.json` |
