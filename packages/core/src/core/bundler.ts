@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { OutputOptions, RollupOptions } from 'rollup';
+import type { OutputOptions, Plugin, RollupOptions } from 'rollup';
 
 let rollupModulePromise: Promise<typeof import('rollup')> | null = null;
 
@@ -34,12 +34,40 @@ interface BundledFile {
   mimeType: string;
 }
 
+interface BundleResult {
+  hash: string;
+  filename: string;
+  content: string;
+}
+
+const EMPTY_RESULT: BundleResult = { hash: '', filename: '', content: '' };
+
 // Memory map để lưu bundled files
 const bundledFilesMap = new Map<string, BundledFile>();
 
-// Cache map để deduplicate bundling requests (cacheKey → entry chunk fileName)
-const bundleCache = new Map<string, string>();
-const cssCache = new Map<string, string>();
+/**
+ * Single-flight map: cacheKey → promise của lần bundle đang chạy (hoặc đã xong).
+ * Vì promise được giữ lại sau khi resolve, map này vừa là in-flight dedup vừa là
+ * result cache. Bundle lỗi bị xoá khỏi map để request sau được thử lại.
+ */
+const bundlePromises = new Map<string, Promise<BundleResult>>();
+
+/**
+ * Chạy `work` đúng một lần cho mỗi cacheKey, kể cả khi nhiều request đến đồng thời.
+ */
+function dedupe(cacheKey: string, work: () => Promise<BundleResult>): Promise<BundleResult> {
+  const pending = bundlePromises.get(cacheKey);
+  if (pending) {
+    return pending;
+  }
+
+  const promise = work().catch((error) => {
+    bundlePromises.delete(cacheKey);
+    throw error;
+  });
+  bundlePromises.set(cacheKey, promise);
+  return promise;
+}
 
 /**
  * Generate hash từ content
@@ -48,167 +76,184 @@ function generateHash(content: string): string {
   return createHash('sha256').update(content).digest('hex').substring(0, 16);
 }
 
+// Rollup coi id bắt đầu bằng \0 là virtual — nó sẽ không cố đọc từ đĩa.
+const VIRTUAL_ENTRY_ID = '\0l5e:bundle-entry';
+
+/**
+ * Entry của mỗi lần bundle chỉ là một danh sách import. Giữ nó trong memory thay
+ * vì ghi ra đĩa: hai request đồng thời cùng một tập script sinh ra cùng nội dung
+ * entry, nên file tạm dùng chung path sẽ bị request này xoá trong lúc rollup của
+ * request kia còn đang đọc.
+ */
+function virtualEntryPlugin(entryContent: string): Plugin {
+  return {
+    name: 'l5e-virtual-entry',
+    resolveId(source) {
+      return source === VIRTUAL_ENTRY_ID ? VIRTUAL_ENTRY_ID : null;
+    },
+    load(id) {
+      return id === VIRTUAL_ENTRY_ID ? entryContent : null;
+    },
+  };
+}
+
+/**
+ * Rewrite vendor/chunk/global imports thành web path và để chúng external.
+ * Global files (*.global.*) đã được client.global.ts load — bundle lại sẽ tạo
+ * module instance trùng (vd nanostores).
+ */
+function vendorPathRewriterPlugin(distClientDir: string): Plugin {
+  const toWebPath = (absolutePath: string) =>
+    '/' + path.relative(distClientDir, absolutePath).replace(/\\/g, '/');
+
+  return {
+    name: 'vendor-path-rewriter',
+    resolveId(source, importer) {
+      if (
+        !source.includes('vendor-') &&
+        !source.includes('chunk-') &&
+        !source.includes('.global')
+      ) {
+        return null;
+      }
+
+      if (path.isAbsolute(source)) {
+        // e.g. C:\...\dist\client\assets\vendor-react-XXX.js -> /assets/vendor-react-XXX.js
+        return { id: toWebPath(source), external: true };
+      }
+
+      if (importer && source.startsWith('.')) {
+        // Relative path như ./auth.global-BOVr81Z5.js — resolve từ importer
+        return { id: toWebPath(path.resolve(path.dirname(importer), source)), external: true };
+      }
+
+      return null;
+    },
+  };
+}
+
+async function runScriptBundle(
+  uniquePaths: string[],
+  distClientDir: string,
+): Promise<BundleResult> {
+  const entryContent = uniquePaths
+    .map((p) => {
+      const filePath = p.startsWith('/')
+        ? path.join(distClientDir, p.substring(1))
+        : path.join(distClientDir, p);
+      return `import ${JSON.stringify(filePath)};`;
+    })
+    .join('\n');
+
+  const rollupOptions: RollupOptions = {
+    input: VIRTUAL_ENTRY_ID,
+    plugins: [virtualEntryPlugin(entryContent), vendorPathRewriterPlugin(distClientDir)],
+    external: (id) => {
+      // External node_modules
+      if (!id.startsWith('.') && !path.isAbsolute(id) && id !== VIRTUAL_ENTRY_ID) {
+        return true;
+      }
+
+      // Vendor/chunk/global do plugin resolveId lo phần rewrite path
+      return false;
+    },
+  };
+
+  const outputOptions: OutputOptions = {
+    format: 'es',
+    inlineDynamicImports: false,
+    entryFileNames: 'bundle-[hash].js',
+    chunkFileNames: 'bundle-[hash].js',
+  };
+
+  const { rollup } = await loadRollup();
+  const bundle = await rollup(rollupOptions);
+  let output;
+  try {
+    ({ output } = await bundle.generate(outputOptions));
+  } finally {
+    await bundle.close();
+  }
+
+  for (const chunk of output) {
+    if (chunk.type !== 'chunk') {
+      continue;
+    }
+    bundledFilesMap.set(chunk.fileName, {
+      content: chunk.code || '',
+      hash: generateHash(chunk.code || ''),
+      filename: chunk.fileName,
+      mimeType: 'application/javascript',
+    });
+  }
+
+  const entryChunk = output[0];
+  if (entryChunk?.type !== 'chunk') {
+    throw new Error('[bundler] rollup produced no entry chunk');
+  }
+
+  return {
+    hash: generateHash(entryChunk.code || ''),
+    filename: entryChunk.fileName,
+    content: entryChunk.code || '',
+  };
+}
+
 /**
  * Bundle JavaScript files từ dist/client thành 1 file
  * Trong production, các file đã được build sẵn trong dist/client
  */
 export async function bundleScripts(
   scriptPaths: string[],
-  rootDir: string,
   distClientDir: string,
-): Promise<{ hash: string; filename: string; content: string }> {
+): Promise<BundleResult> {
   if (scriptPaths.length === 0) {
-    return { hash: '', filename: '', content: '' };
+    return EMPTY_RESULT;
   }
 
-  // Dedupe paths (remove duplicates)
-  const uniquePaths = [...new Set(scriptPaths)];
-
-  // Tạo cache key từ sorted unique paths
-  const cacheKey = `scripts:${uniquePaths.sort().join(',')}`;
-
-  // Kiểm tra cache - return entry chunk info if already bundled
-  const cachedEntryFileName = bundleCache.get(cacheKey);
-  if (cachedEntryFileName) {
-    const entryFile = bundledFilesMap.get(cachedEntryFileName);
-    if (entryFile) {
-      return {
-        hash: entryFile.hash,
-        filename: entryFile.filename,
-        content: entryFile.content,
-      };
-    }
-  }
-
-  // Temp file path for cleanup
-  let entryFile: string | null = null;
+  const uniquePaths = [...new Set(scriptPaths)].sort();
+  const cacheKey = `scripts:${uniquePaths.join(',')}`;
 
   try {
-    // Sử dụng rollup để bundle nếu cần (resolve imports, etc)
-    // Tạo temp entry file
-    const hash = generateHash(uniquePaths.join('\n'));
-    const tempDir = path.join(rootDir, '.temp-bundle');
-    await fs.mkdir(tempDir, { recursive: true }).catch(() => {});
-
-    entryFile = path.join(tempDir, `entry-${hash}.js`);
-    // Tạo entry file import tất cả scripts
-    const entryContent = uniquePaths
-      .map((p, i) => {
-        const filePath = p.startsWith('/')
-          ? path.join(distClientDir, p.substring(1))
-          : path.join(distClientDir, p);
-        return `import ${JSON.stringify(filePath)};`;
-      })
-      .join('\n');
-
-    await fs.writeFile(entryFile, entryContent, 'utf-8');
-    console.log(`[bundler] Wrote entry file to ${entryFile}`);
-    console.log(`[bundler] Entry content: ${entryContent}`);
-    // Rollup config để bundle
-    const rollupOptions: RollupOptions = {
-      input: entryFile,
-      plugins: [
-        {
-          name: 'vendor-path-rewriter',
-          resolveId(source, importer, _options) {
-            // Handle vendor/chunk/global files: convert absolute paths to web paths
-            // Global files (*.global.*) are already loaded by client.global.ts —
-            // re-bundling them would create duplicate module instances (e.g. nanostores)
-            if (
-              source.includes('vendor-') ||
-              source.includes('chunk-') ||
-              source.includes('.global')
-            ) {
-              console.log(`[bundler] Resolving source: ${source}`);
-              if (path.isAbsolute(source)) {
-                console.log(`[bundler] Resolving absolute path: ${source}`);
-                // e.g., C:\...\dist\client\assets\vendor-react-XXX.js -> /assets/vendor-react-XXX.js
-                const relativePath = path.relative(distClientDir, source);
-                const webPath = '/' + relativePath.replace(/\\/g, '/');
-                return { id: webPath, external: true };
-              } else if (importer && source.startsWith('.')) {
-                console.log(
-                  `[bundler] Resolving relative path: ${source} from importer: ${importer}`,
-                );
-                // Relative path like ./auth.global-BOVr81Z5.js — resolve from importer
-                const resolved = path.resolve(path.dirname(importer), source);
-                const relativePath = path.relative(distClientDir, resolved);
-                const webPath = '/' + relativePath.replace(/\\/g, '/');
-                return { id: webPath, external: true };
-              } else {
-                console.log(`[bundler] Resolving source: ${source}`);
-              }
-            }
-            return null; // Let other plugins/external handle
-          },
-        },
-      ],
-      external: (id) => {
-        // External node_modules
-        if (!id.startsWith('.') && !path.isAbsolute(id)) {
-          return true;
-        }
-
-        // Let plugin handle vendor/chunk/global files (don't mark external here)
-        if (id.includes('vendor-') || id.includes('chunk-') || id.includes('.global')) {
-          return false; // Let plugin's resolveId handle path rewriting
-        }
-
-        return false;
-      },
-    };
-
-    const outputOptions: OutputOptions = {
-      format: 'es',
-      inlineDynamicImports: false,
-      entryFileNames: 'bundle-[hash].js',
-      chunkFileNames: 'bundle-[hash].js',
-    };
-
-    const { rollup } = await loadRollup();
-    const bundle = await rollup(rollupOptions);
-    const { output } = await bundle.generate(outputOptions);
-    await bundle.close();
-
-    // Lấy bundled content từ rollup
-
-    output.forEach((o) => {
-      if (o.type !== 'chunk') {
-        return;
-      }
-      // Lưu vào map với key = fileName
-      const bundledFile: BundledFile = {
-        content: o.code || '',
-        hash: generateHash(o.code || ''),
-        filename: o.fileName,
-        mimeType: 'application/javascript',
-      };
-      bundledFilesMap.set(o.fileName, bundledFile);
-    });
-
-    // Cache entry chunk fileName for deduplication
-    const entryChunk = output[0];
-    if (entryChunk?.type === 'chunk') {
-      bundleCache.set(cacheKey, entryChunk.fileName);
-    }
-
-    // Return entry chunk info
-    return {
-      hash: generateHash(output[0]?.code || ''),
-      filename: output[0]?.fileName || '',
-      content: output[0]?.code || '',
-    };
+    return await dedupe(cacheKey, () => runScriptBundle(uniquePaths, distClientDir));
   } catch (error) {
     console.error('[bundler] Error bundling scripts:', error);
-    return { hash: '', filename: '', content: '' };
-  } finally {
-    // Cleanup temp entry file
-    if (entryFile) {
-      await fs.unlink(entryFile).catch(() => {
-        // Ignore cleanup errors
-      });
+    return EMPTY_RESULT;
+  }
+}
+
+async function runCssBundle(
+  uniquePaths: string[],
+  distClientDir: string,
+): Promise<BundleResult> {
+  const cssContents: string[] = [];
+
+  for (const cssPath of uniquePaths) {
+    // cssPath có thể là "/assets/xxx.css" hoặc từ manifest
+    const filePath = cssPath.startsWith('/')
+      ? path.join(distClientDir, cssPath.substring(1))
+      : path.join(distClientDir, cssPath);
+
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      cssContents.push(`/* ${cssPath} */\n${content}\n`);
+    } catch (err) {
+      console.warn(`[bundler] Failed to read CSS file: ${cssPath}`, err);
     }
   }
+
+  const bundledContent = cssContents.join('\n\n');
+  const hash = generateHash(bundledContent);
+  const filename = `bundle-${hash}.css`;
+
+  bundledFilesMap.set(filename, {
+    content: bundledContent,
+    hash,
+    filename,
+    mimeType: 'text/css',
+  });
+
+  return { hash, filename, content: bundledContent };
 }
 
 /**
@@ -217,70 +262,20 @@ export async function bundleScripts(
  */
 export async function bundleCss(
   cssPaths: string[],
-  rootDir: string,
   distClientDir: string,
-): Promise<{ hash: string; filename: string; content: string }> {
+): Promise<BundleResult> {
   if (cssPaths.length === 0) {
-    return { hash: '', filename: '', content: '' };
+    return EMPTY_RESULT;
   }
 
-  // Dedupe paths (remove duplicates)
-  const uniquePaths = [...new Set(cssPaths)];
-
-  // Tạo cache key từ sorted unique paths
-  const cacheKey = `css:${uniquePaths.sort().join(',')}`;
-
-  // Kiểm tra cache - return cached file if already bundled
-  const cachedFileName = cssCache.get(cacheKey);
-  if (cachedFileName) {
-    const cachedFile = bundledFilesMap.get(cachedFileName);
-    if (cachedFile) {
-      return {
-        hash: cachedFile.hash,
-        filename: cachedFile.filename,
-        content: cachedFile.content,
-      };
-    }
-  }
+  const uniquePaths = [...new Set(cssPaths)].sort();
+  const cacheKey = `css:${uniquePaths.join(',')}`;
 
   try {
-    // Đọc và gộp tất cả CSS files từ dist/client
-    const cssContents: string[] = [];
-
-    for (const cssPath of uniquePaths) {
-      // cssPath có thể là "/assets/xxx.css" hoặc từ manifest
-      const filePath = cssPath.startsWith('/')
-        ? path.join(distClientDir, cssPath.substring(1))
-        : path.join(distClientDir, cssPath);
-
-      try {
-        const content = await fs.readFile(filePath, 'utf-8');
-        cssContents.push(`/* ${cssPath} */\n${content}\n`);
-      } catch (err) {
-        console.warn(`[bundler] Failed to read CSS file: ${cssPath}`, err);
-      }
-    }
-
-    const bundledContent = cssContents.join('\n\n');
-    const hash = generateHash(bundledContent);
-    const filename = `bundle-${hash}.css`;
-
-    // Lưu vào map với key = filename
-    const bundledFile: BundledFile = {
-      content: bundledContent,
-      hash,
-      filename,
-      mimeType: 'text/css',
-    };
-    bundledFilesMap.set(filename, bundledFile);
-
-    // Cache filename for deduplication
-    cssCache.set(cacheKey, filename);
-
-    return { hash, filename, content: bundledContent };
+    return await dedupe(cacheKey, () => runCssBundle(uniquePaths, distClientDir));
   } catch (error) {
     console.error('[bundler] Error bundling CSS:', error);
-    return { hash: '', filename: '', content: '' };
+    return EMPTY_RESULT;
   }
 }
 
@@ -296,4 +291,5 @@ export function getBundledFile(filename: string): BundledFile | undefined {
  */
 export function clearBundledFiles(): void {
   bundledFilesMap.clear();
+  bundlePromises.clear();
 }

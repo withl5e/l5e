@@ -285,12 +285,12 @@ async function createPageResponse({
     }
 
     if (mappedScripts.length > 0) {
-      const bundledScript = await bundleScripts(mappedScripts, root, distClientDir);
+      const bundledScript = await bundleScripts(mappedScripts, distClientDir);
       scriptSrcList = bundledScript.filename ? [`/${bundledScript.filename}`] : mappedScripts;
     }
 
     if (mappedCssFiles.length > 0) {
-      const bundledCss = await bundleCss(mappedCssFiles, root, distClientDir);
+      const bundledCss = await bundleCss(mappedCssFiles, distClientDir);
       if (bundledCss.filename) {
         cssSrcList = [`/${bundledCss.filename}`];
       }
