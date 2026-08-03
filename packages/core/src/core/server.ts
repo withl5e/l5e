@@ -330,7 +330,10 @@ async function createPageResponse({
 
   let cssHtml = '';
   if (!isProduction) {
-    cssHtml = cssSrcList.map((src) => `<link rel="stylesheet" href="${src}">`).join('');
+    // Registry đã dedupe, nhưng vẫn lọc lại ở đây để dev không bao giờ ra thẻ trùng
+    cssHtml = [...new Set(cssSrcList)]
+      .map((src) => `<link rel="stylesheet" href="${src}">`)
+      .join('');
   }
 
   let allScripts = [...globalScripts, ...scriptSrcList];
@@ -340,6 +343,10 @@ async function createPageResponse({
     if (existsSync(globalTsPath)) {
       allScripts = ['/src/client.global.ts', ...allScripts];
     }
+
+    // useClientJs('/src/client.global.ts') do user tự gọi sẽ trùng với entry
+    // được prepend ở trên — registry không bắt được ca này nên dedupe lại
+    allScripts = [...new Set(allScripts)];
 
     if (islandEntries.length > 0) {
       const islandMap: Record<string, string> = {};

@@ -107,11 +107,26 @@ function createRequestContext(requestInfo: RequestInfo): RenderContext {
   };
 }
 
+/**
+ * Chuẩn hoá path asset về dạng web path có leading `/`.
+ * Dev sinh thẻ thẳng từ path này, còn prod strip leading `/` để tra manifest —
+ * không normalize thì `'src/a.css'` và `'/src/a.css'` là hai entry khác nhau ở
+ * dev nhưng lại trỏ cùng một manifest key ở prod.
+ */
+function normalizeAssetPath(path: string): string {
+  const normalized = path.trim().replace(/\\/g, '/');
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+}
+
 export function useClientJs(path: string): string {
-  if (typeof path === 'string' && path.length > 0) {
+  if (typeof path === 'string' && path.trim().length > 0) {
     const renderContext = renderStore.getStore();
     if (renderContext) {
-      renderContext.clientJsRegistry.push({ path, from: 'Unknown' });
+      const normalized = normalizeAssetPath(path);
+      // Dedupe theo path, giữ thứ tự lần gọi đầu tiên
+      if (!renderContext.clientJsRegistry.some((entry) => entry.path === normalized)) {
+        renderContext.clientJsRegistry.push({ path: normalized, from: 'Unknown' });
+      }
     }
   }
   return '';
@@ -153,10 +168,14 @@ export function getSsrIslands(): SsrIslandEntry[] {
 }
 
 export function useCss(path: string): string {
-  if (typeof path === 'string' && path.length > 0) {
+  if (typeof path === 'string' && path.trim().length > 0) {
     const renderContext = renderStore.getStore();
     if (renderContext) {
-      renderContext.cssRegistry.push({ path, from: 'Unknown' });
+      const normalized = normalizeAssetPath(path);
+      // Dedupe theo path — thứ tự lần gọi đầu tiên quyết định thứ tự cascade
+      if (!renderContext.cssRegistry.some((entry) => entry.path === normalized)) {
+        renderContext.cssRegistry.push({ path: normalized, from: 'Unknown' });
+      }
     }
   }
   return '';

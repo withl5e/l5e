@@ -11,6 +11,14 @@ order: 16
 - L5E emits the `<link>` tag in the response and skips it on other views.
 - In production, all view CSS for the request is bundled together for one round-trip.
 
+## Calling it more than once
+
+Registering the same path several times in one request — a shared component
+that renders twice, a layout and a page that both need the file — emits a
+single `<link>`. The first call decides where the file lands in the cascade;
+later calls for the same path are ignored. This holds in dev and in
+production.
+
 ## Path convention
 
 > **The path must be an absolute path from the project root, starting with

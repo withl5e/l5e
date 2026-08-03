@@ -6,6 +6,10 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 const I18N_PORT = 5179;
 export const I18N_BASE_URL = `http://127.0.0.1:${I18N_PORT}`;
 
+// Dev server for specs that assert dev-only output (unbundled asset tags).
+const DEV_PORT = 5180;
+export const DEV_BASE_URL = `http://127.0.0.1:${DEV_PORT}`;
+
 export default defineConfig({
   testDir: './specs',
   fullyParallel: false,
@@ -48,6 +52,18 @@ export default defineConfig({
       env: {
         NODE_ENV: 'production',
         PORT: String(I18N_PORT),
+      },
+    },
+    {
+      command: `pnpm --filter l5e-basic-example dev`,
+      url: DEV_BASE_URL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        NODE_ENV: 'development',
+        PORT: String(DEV_PORT),
       },
     },
   ],

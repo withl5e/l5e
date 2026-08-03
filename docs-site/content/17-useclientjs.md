@@ -11,6 +11,13 @@ order: 17
 - Runs after HTML parse; use plain DOM APIs, listeners, fetch — no framework required.
 - Production: per-view client scripts are merged into a single `/bundle-<hash>.js`.
 
+## Calling it more than once
+
+Registering the same path several times in one request — a shared component
+that renders twice, a layout and a page that both need the script — emits a
+single `<script>`. Later calls for the same path are ignored, so the module
+is fetched and executed once. This holds in dev and in production.
+
 ## Path convention
 
 > **The path must be an absolute path from the project root, starting with
