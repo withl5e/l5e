@@ -725,8 +725,30 @@ export const viewComponents = import.meta.glob('/src/views/*/index.tsx');
 
       // Virtual module: l5e-route
       if (id === '\0' + VIRTUAL_L5E_ROUTE) {
-        // Always use TypeScript
-        return `export { default } from '/src/route.ts';`;
+        // Load /src/route.ts LAZILY (dynamic import inside the handler) rather
+        // than via a static `export { default } from '/src/route.ts'`.
+        //
+        // A static re-export drags the user's route module — and everything it
+        // imports — into entry-server's *static* SSR graph. Route files commonly
+        // import the `@withl5e/l5e` barrel (for RedirectException, types, ...),
+        // and that barrel re-exports `render` from entry-server. That closes a
+        // static import cycle:
+        //   entry-server → virtual:l5e-route → /src/route.ts → @withl5e/l5e → entry-server
+        // On the first dev request Vite can begin evaluating entry-server while
+        // it is still suspended awaiting this very import, so `render()` runs
+        // before `const __vite_ssr_import_N__ = await import('virtual:l5e-route')`
+        // has been assigned — throwing "Cannot access '__vite_ssr_import_N__'
+        // before initialization". A page reload "fixes" it only because the graph
+        // is fully warm the second time.
+        //
+        // Importing lazily removes /src/route.ts from the static graph: entry-server
+        // finishes initializing first, and the route module (with its barrel import
+        // back to a now-complete entry-server) is pulled only on the first render()
+        // call. No manual caching — Vite/ESM caches the evaluated module and later
+        // imports still observe HMR invalidations of route.ts.
+        return `export default function routeHandler(requestInfo) {
+  return import('/src/route.ts').then((mod) => mod.default(requestInfo));
+}`;
       }
 
       // Virtual module: l5e-ssr-entry
