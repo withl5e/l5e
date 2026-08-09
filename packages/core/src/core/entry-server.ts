@@ -17,6 +17,7 @@ import {
   getCssEntries,
   getHeadContent,
   getIslandEntries,
+  getIslandProps,
   getSchemas,
   getSsrIslands,
   jsxFactory as h,
@@ -111,6 +112,12 @@ export interface RenderResult {
   scripts?: string[];
   styles?: string[];
   islands?: Array<{ key: string; src: string; name: string }>;
+  /**
+   * Externalized island props (index === element's `data-island-idx`). Present
+   * only in externalized mode; createPageResponse serializes it into the
+   * `<script id="_l5e_data_">` at the end of the document.
+   */
+  islandData?: unknown[];
   head?: string;
   lang?: string;
   statusCode?: number;
@@ -221,7 +228,20 @@ async function renderErrorView(err: HttpException, lang?: string): Promise<Rende
   }
 }
 
-export async function render(url: string, requestInfo: RequestInfo = {}): Promise<RenderResult> {
+export interface RenderOptions {
+  /**
+   * Externalize island props into the trailing `_l5e_data_` script instead of
+   * inlining `data-island-props` on each element. Default true.
+   */
+  externalizeIslandProps?: boolean;
+}
+
+export async function render(
+  url: string,
+  requestInfo: RequestInfo = {},
+  options: RenderOptions = {},
+): Promise<RenderResult> {
+  const externalizeIslandProps = options.externalizeIslandProps ?? true;
   return runInRenderContext(async () => {
     try {
       // Step 1: Call route handler to get view name
@@ -409,6 +429,7 @@ export async function render(url: string, requestInfo: RequestInfo = {}): Promis
       const clientEntries = getClientJsEntries();
       const cssEntries = getCssEntries();
       const islandEntries = getIslandEntries();
+      const islandData = getIslandProps();
       const cacheTags = getCacheTags();
       const headContent = getHeadContent();
 
@@ -423,6 +444,7 @@ export async function render(url: string, requestInfo: RequestInfo = {}): Promis
         scripts: clientEntries.map((entry) => entry.path),
         styles: cssEntries.map((entry) => entry.path),
         islands: islandEntries.length > 0 ? islandEntries : undefined,
+        islandData: islandData.length > 0 ? islandData : undefined,
         head: headHtml,
         lang,
         maxAge,
@@ -463,5 +485,5 @@ export async function render(url: string, requestInfo: RequestInfo = {}): Promis
           });
       return await renderErrorView(serviceError);
     }
-  }, requestInfo);
+  }, requestInfo, undefined, { externalizeIslandProps });
 }

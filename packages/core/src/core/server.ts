@@ -19,6 +19,14 @@ export interface ServerOptions {
   publicDir?: string;
   setupApp?: (app: any) => void | Promise<void>;
   app?: any; // Express
+  /**
+   * Externalize React island props into a single `<script id="_l5e_data_">` at
+   * the end of the document (referenced by `data-island-idx`) instead of inlining
+   * a large `data-island-props` attribute on each element — keeps the SSR HTML
+   * lean so crawlers read content first. Default true; set false for the legacy
+   * inline behavior.
+   */
+  externalizeIslandProps?: boolean;
 }
 
 export interface ServerContext {
@@ -46,7 +54,11 @@ export function applyHtmlLang(template: string, lang: string): string {
 }
 
 type EntryServerModule = {
-  render: (url: string, requestInfo?: RequestInfo) => Promise<RenderResult>;
+  render: (
+    url: string,
+    requestInfo?: RequestInfo,
+    options?: { externalizeIslandProps?: boolean },
+  ) => Promise<RenderResult>;
   loadMiddleware?: () => Promise<MiddlewareHandler | undefined>;
 };
 
@@ -235,6 +247,18 @@ async function createPageResponse({
   let globalScripts: string[] = [];
   let islandRegistryScript = '';
 
+  // Externalized island props → a single JSON script at the end of the document.
+  // serialize-javascript with isJSON escapes `<`, `>`, `&` (and U+2028/2029) so the
+  // props can't break out of the <script> block or inject markup (XSS). The runtime
+  // reads it via `document.getElementById('_l5e_data_')` + JSON.parse.
+  let islandDataScript = '';
+  if (rendered.islandData && rendered.islandData.length > 0) {
+    islandDataScript = `<script type="application/json" id="_l5e_data_">${serialize(
+      rendered.islandData,
+      { isJSON: true },
+    )}</script>`;
+  }
+
   if (isProduction && manifest) {
     scriptSrcList = scriptSrcList.filter((src) => !src.includes('.global.'));
     cssSrcList = cssSrcList.filter((src) => !src.includes('.global.'));
@@ -358,6 +382,7 @@ async function createPageResponse({
   }
 
   const scriptsHtml =
+    islandDataScript +
     islandRegistryScript +
     allScripts.map((src) => `<script type="module" src="${src}"></script>`).join('');
 
@@ -401,6 +426,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
   const root = options.root || process.cwd();
   const base = options.base || '/';
   const isProduction = process.env.NODE_ENV === 'production';
+  const externalizeIslandProps = options.externalizeIslandProps ?? true;
 
   // Cached production assets
   const templateHtml = isProduction
@@ -653,7 +679,11 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
       const url = req.originalUrl.replace(base, '');
 
       let template: string;
-      let render: (url: string, requestInfo?: any) => Promise<any>;
+      let render: (
+        url: string,
+        requestInfo?: any,
+        options?: { externalizeIslandProps?: boolean },
+      ) => Promise<any>;
       let loadMiddleware: EntryServerModule['loadMiddleware'];
       let manifest: Record<string, any> | undefined;
 
@@ -707,7 +737,9 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
       const renderResponse = async (webRequest: globalThis.Request) => {
         const nextRequestInfo = createRequestInfo(req, webRequest, base, locals);
         const nextUrl = getRenderUrl(nextRequestInfo.url!, base);
-        const nextRendered = await render(nextUrl, nextRequestInfo);
+        const nextRendered = await render(nextUrl, nextRequestInfo, {
+          externalizeIslandProps,
+        });
         return createPageResponse({
           rendered: nextRendered,
           template,

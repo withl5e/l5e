@@ -82,6 +82,15 @@ interface RenderContext {
   cssRegistry: Array<{ path: string; from: string }>;
   islandRegistry: IslandEntry[];
   ssrIslands: SsrIslandEntry[];
+  /**
+   * When true, ClientIsland writes its props into `islandProps` (referenced by a
+   * `data-island-idx`) instead of inlining a `data-island-props` attribute, so a
+   * single `<script id="_l5e_data_">` at the end of the document carries all
+   * island props — keeping the SSR HTML lean for crawlers reading top-down.
+   */
+  externalizeIslandProps: boolean;
+  /** Ordered island props; index === the element's `data-island-idx`. */
+  islandProps: unknown[];
   cacheTags: Set<string>;
   headRegistry: HeadEntry[]; // Thay vì JSXChild[]
   metadataStack: Metadata[]; // Stack để track metadata hierarchy
@@ -92,13 +101,23 @@ interface RenderContext {
 
 const renderStore = new AsyncLocalStorage<RenderContext>();
 
+export interface RenderContextOptions {
+  /** Default true — see RenderContext.externalizeIslandProps. */
+  externalizeIslandProps?: boolean;
+}
+
 // Create context for each request
-function createRequestContext(requestInfo: RequestInfo): RenderContext {
+function createRequestContext(
+  requestInfo: RequestInfo,
+  options?: RenderContextOptions,
+): RenderContext {
   return {
     clientJsRegistry: [],
     cssRegistry: [],
     islandRegistry: [],
     ssrIslands: [],
+    externalizeIslandProps: options?.externalizeIslandProps ?? false,
+    islandProps: [],
     cacheTags: new Set(),
     headRegistry: [],
     metadataStack: [],
@@ -148,6 +167,29 @@ export function getIslandEntries(): IslandEntry[] {
   return context.islandRegistry.slice();
 }
 
+/** True when island props should be externalized into the `_l5e_data_` script. */
+export function isIslandPropsExternalized(): boolean {
+  return renderStore.getStore()?.externalizeIslandProps ?? false;
+}
+
+/**
+ * Append island props to the per-request store and return its index (used as the
+ * element's `data-island-idx`). Returns -1 outside a render context so the caller
+ * can fall back to inlining the props.
+ */
+export function pushIslandProps(props: unknown): number {
+  const context = renderStore.getStore();
+  if (!context) return -1;
+  return context.islandProps.push(props) - 1;
+}
+
+/** Ordered island props for the trailing `_l5e_data_` script (index === data-island-idx). */
+export function getIslandProps(): unknown[] {
+  const context = renderStore.getStore();
+  if (!context) return [];
+  return context.islandProps.slice();
+}
+
 /**
  * Register a pending SSR island render. Returns a unique placeholder token that
  * the caller embeds (as raw HTML) in the island's body. entry-server replaces
@@ -186,8 +228,9 @@ export function runInRenderContext<T>(
   renderFn: () => T | Promise<T>,
   requestInfo: RequestInfo,
   viewName?: string,
+  options?: RenderContextOptions,
 ): Promise<T> {
-  const context = createRequestContext(requestInfo);
+  const context = createRequestContext(requestInfo, options);
   if (viewName) {
     context.viewName = viewName;
   }

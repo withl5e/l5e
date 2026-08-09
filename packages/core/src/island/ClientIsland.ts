@@ -1,5 +1,7 @@
 import {
   jsxFactory,
+  isIslandPropsExternalized,
+  pushIslandProps,
   registerIsland,
   registerSsrIsland,
   type JSXChild,
@@ -67,9 +69,30 @@ export function ClientIsland(attrs: ClientIslandProps): JSXNode {
   const dataAttrs: Record<string, string> = {
     'data-island': __key || 'unresolved',
     'data-island-name': componentName,
-    'data-island-props': JSON.stringify(props),
     'data-island-mount': mount,
   };
+
+  // Props delivery. `mount="none"` never mounts/hydrates on the client, so its
+  // props are dead weight → omit them entirely in the externalized mode.
+  //
+  // Externalized (default): props go into the per-request store and the element
+  // just carries a `data-island-idx` pointer; a single `_l5e_data_` script at the
+  // end of the document holds every island's props, keeping the SSR body lean.
+  // Falls back to inlining when there's no render context (idx === -1).
+  //
+  // Legacy inline mode is kept byte-for-byte (props inlined even for mount="none").
+  if (isIslandPropsExternalized()) {
+    if (mount !== 'none') {
+      const idx = pushIslandProps(props);
+      if (idx >= 0) {
+        dataAttrs['data-island-idx'] = String(idx);
+      } else {
+        dataAttrs['data-island-props'] = JSON.stringify(props);
+      }
+    }
+  } else {
+    dataAttrs['data-island-props'] = JSON.stringify(props);
+  }
 
   if (mountOpts) {
     dataAttrs['data-island-opts'] = mountOpts;

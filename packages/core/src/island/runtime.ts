@@ -69,12 +69,38 @@ import 'virtual:l5e-island-strategies';
 // Format: { "Counter_a3f2": "/assets/Counter-Abc123.js" }
 const islandRegistry: Record<string, string> = (window as any).__L5E_ISLANDS__ || {};
 
+// Props for islands rendered in externalized mode live in a single
+// `<script type="application/json" id="_l5e_data_">` at the end of the document
+// (keeps the SSR body lean for crawlers). Parsed once, lazily.
+let islandDataCache: unknown[] | null = null;
+function getIslandData(): unknown[] {
+  if (islandDataCache) return islandDataCache;
+  const el = document.getElementById('_l5e_data_');
+  if (!el || !el.textContent) return (islandDataCache = []);
+  try {
+    const parsed = JSON.parse(el.textContent);
+    islandDataCache = Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.error('[l5e-island] Failed to parse _l5e_data_ props store:', err);
+    islandDataCache = [];
+  }
+  return islandDataCache;
+}
+
+function readProps(el: Element): Record<string, unknown> {
+  const idx = el.getAttribute('data-island-idx');
+  if (idx !== null) {
+    return (getIslandData()[Number(idx)] as Record<string, unknown>) || {};
+  }
+  return JSON.parse(el.getAttribute('data-island-props') || '{}');
+}
+
 function discoverIslands(): IslandMeta[] {
   return Array.from(document.querySelectorAll('[data-island]')).map((el) => ({
     element: el as HTMLElement,
     registryKey: el.getAttribute('data-island')!,
     exportName: el.getAttribute('data-island-name')!,
-    props: JSON.parse(el.getAttribute('data-island-props') || '{}'),
+    props: readProps(el),
     mount: el.getAttribute('data-island-mount') || 'load',
     mountOpts: el.getAttribute('data-island-opts') || undefined,
     ssr: el.hasAttribute('data-island-ssr'),
