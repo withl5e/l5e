@@ -1,3 +1,7 @@
+@import './shared/main-menu/styles.css';
+@import './shared/footer/styles.css';
+@import './features/search/styles.css';
+
 :root {
   --bg: #ffffff;
   --bg-muted: #f6f7f9;

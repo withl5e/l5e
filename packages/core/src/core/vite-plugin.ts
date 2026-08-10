@@ -10,6 +10,7 @@ import {
 } from 'fs';
 import { dirname, join, relative, resolve } from 'path';
 import type { Plugin, UserConfig } from 'vite';
+import { findGlobalStyleInput } from './global-style';
 
 const VIRTUAL_L5E_VIEWS = 'virtual:l5e-views';
 const VIRTUAL_L5E_ROUTE = 'virtual:l5e-route';
@@ -246,6 +247,12 @@ function discoverRollupInput(rootDir: string): {
       console.log('[l5e] Detected src/client.global.ts and added as entry');
     }
 
+    const globalStyleInput = findGlobalStyleInput(rootDir);
+    if (globalStyleInput) {
+      input['global-style'] = globalStyleInput;
+      console.log('[l5e] Detected src/global.css and added as global stylesheet');
+    }
+
     // Scan all .tsx and .ts files
     const tsFiles = scanTsFiles(srcDir);
 
@@ -296,6 +303,12 @@ function discoverRollupInput(rootDir: string): {
           : cssPath;
 
       const absolutePath = resolve(rootDir, relativePath);
+
+      // src/global.css is already a dedicated convention entry. Keeping one
+      // Rollup input avoids collisions if a shared layout also calls useCss().
+      if (globalStyleInput && resolve(absolutePath) === resolve(globalStyleInput)) {
+        continue;
+      }
 
       // Only add if file exists
       if (!existsSync(absolutePath)) {

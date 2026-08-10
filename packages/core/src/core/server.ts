@@ -11,6 +11,7 @@ import { bundleCss, bundleScripts, getBundledFile } from './bundler';
 import type { RenderResult, RequestInfo } from './entry-server';
 import { escapeProp } from './render';
 import { createHeadersFromExpressRequest, parseCookies } from './request';
+import { resolveGlobalStyleHref } from './global-style';
 
 export interface ServerOptions {
   root?: string;
@@ -213,6 +214,7 @@ async function createPageResponse({
   root,
   distClientDir,
   isProduction,
+  assetBase,
 }: {
   rendered: RenderResult;
   template: string;
@@ -220,6 +222,7 @@ async function createPageResponse({
   root: string;
   distClientDir: string;
   isProduction: boolean;
+  assetBase: string;
 }): Promise<globalThis.Response> {
   const rawResponse = createRawResponse(rendered);
   if (rawResponse) {
@@ -244,8 +247,22 @@ async function createPageResponse({
   const swr: number | undefined = rendered.swr;
 
   let extraHead = '';
+  const emittedStyles = new Set<string>();
+  const appendStylesheet = (href: string, crossorigin = false) => {
+    if (emittedStyles.has(href)) return;
+    emittedStyles.add(href);
+    extraHead += `<link rel="stylesheet"${crossorigin ? ' crossorigin' : ''} href="${escapeProp(href)}">`;
+  };
   let globalScripts: string[] = [];
   let islandRegistryScript = '';
+
+  const globalStyleHref = resolveGlobalStyleHref({
+    root,
+    manifest,
+    isProduction,
+    base: assetBase,
+  });
+  if (globalStyleHref) appendStylesheet(globalStyleHref, isProduction);
 
   // Externalized island props → a single JSON script at the end of the document.
   // serialize-javascript with isJSON escapes `<`, `>`, `&` (and U+2028/2029) so the
@@ -324,7 +341,7 @@ async function createPageResponse({
     if (globalEntry) {
       if (globalEntry.css && globalEntry.css.length > 0) {
         globalEntry.css.forEach((cssFile: string) => {
-          extraHead += `<link rel="stylesheet" crossorigin href="/${cssFile}">`;
+          appendStylesheet(`/${cssFile}`, true);
         });
       }
       if (globalEntry.file) {
@@ -346,18 +363,13 @@ async function createPageResponse({
     }
 
     if (cssSrcList.length > 0) {
-      extraHead += cssSrcList
-        .map((file) => `<link rel="stylesheet" crossorigin href="${file}">`)
-        .join('');
+      cssSrcList.forEach((file) => appendStylesheet(file, true));
     }
   }
 
-  let cssHtml = '';
   if (!isProduction) {
     // Registry đã dedupe, nhưng vẫn lọc lại ở đây để dev không bao giờ ra thẻ trùng
-    cssHtml = [...new Set(cssSrcList)]
-      .map((src) => `<link rel="stylesheet" href="${src}">`)
-      .join('');
+    [...new Set(cssSrcList)].forEach((src) => appendStylesheet(src));
   }
 
   let allScripts = [...globalScripts, ...scriptSrcList];
@@ -394,7 +406,7 @@ async function createPageResponse({
   const html = rendered.rawHtml
     ? rendered.html || ''
     : templateWithLang
-        .replace(`<!--app-head-->`, () => (rendered.head ?? '') + extraHead + cssHtml)
+        .replace(`<!--app-head-->`, () => (rendered.head ?? '') + extraHead)
         .replace(`<!--app-html-->`, () => rendered.html ?? '')
         .replace(`<!--app-scripts-->`, () => scriptsHtml);
 
@@ -747,6 +759,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
           root,
           distClientDir,
           isProduction,
+          assetBase: isProduction ? base : vite!.config.base,
         });
       };
 
