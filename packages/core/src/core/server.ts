@@ -9,9 +9,9 @@ import type { ViteDevServer } from 'vite';
 import { createContext, type MiddlewareHandler, type RewritePayload } from '../middleware';
 import { bundleCss, bundleScripts, getBundledFile } from './bundler';
 import type { RenderResult, RequestInfo } from './entry-server';
+import { resolveGlobalStyleHref } from './global-style';
 import { escapeProp } from './render';
 import { createHeadersFromExpressRequest, parseCookies } from './request';
-import { resolveGlobalStyleHref } from './global-style';
 
 export interface ServerOptions {
   root?: string;
@@ -406,21 +406,39 @@ async function createPageResponse({
   const html = rendered.rawHtml
     ? rendered.html || ''
     : templateWithLang
-        .replace(`<!--app-head-->`, () => (rendered.head ?? '') + extraHead)
-        .replace(`<!--app-html-->`, () => rendered.html ?? '')
-        .replace(`<!--app-scripts-->`, () => scriptsHtml);
+      .replace(`<!--app-head-->`, () => (rendered.head ?? '') + extraHead)
+      .replace(`<!--app-html-->`, () => rendered.html ?? '')
+      .replace(`<!--app-scripts-->`, () => scriptsHtml);
 
   const headers = new Headers({
     'Content-Type': 'text/html',
   });
 
-  const cacheControlParts: string[] = ['public'];
-  if (maxAge !== undefined) cacheControlParts.push(`max-age=${maxAge}`);
-  if (sMaxAge !== undefined) cacheControlParts.push(`s-maxage=${sMaxAge}`);
-  if (swr !== undefined) cacheControlParts.push(`stale-while-revalidate=${swr}`);
+  const cacheControlParts: string[] = [];
+  const cdnCacheControlParts: string[] = [];
+  if (maxAge !== undefined) {
+    cacheControlParts.push(`max-age=${maxAge}`);
+    cdnCacheControlParts.push(`max-age=${maxAge}`);
+  }
+
+  if (sMaxAge !== undefined) {
+    cdnCacheControlParts.push(`s-maxage=${sMaxAge}`);
+  }
+
+  // ko cho phép browser swr
+  if (swr !== undefined) {
+    cdnCacheControlParts.push(`stale-while-revalidate=${swr}`);
+  }
 
   if (cacheControlParts.length > 1 && isProduction) {
+    cacheControlParts.push('public');
+    cacheControlParts.push('must-revalidate');
+
+    cdnCacheControlParts.push('public');
+
+
     headers.set('Cache-Control', cacheControlParts.join(', '));
+    headers.set('CDN-Cache-Control', cdnCacheControlParts.join(', '));
   }
 
   if (process.env.NODE_ENV === 'production') {

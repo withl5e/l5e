@@ -155,8 +155,20 @@ export type SchemaMarkup = any | Array<any>;
 export interface LoaderResult {
   props?: Record<string, any>;
   lang?: string;
+
+  /**
+   * Browser, CDN max-age
+   */
   maxAge?: number;
+
+  /**
+   * CDN max-age
+   */
   sMaxAge?: number;
+
+  /**
+   * CDN stale-while-revalidate, browser must revalidate
+   */
   swr?: number;
   cacheTags?: string[] | Record<string, boolean>;
   rawResponse?: RawResponse;
@@ -479,10 +491,10 @@ export async function render(
       const serviceError = isProduction
         ? new ServiceUnavailableException('Internal Server Error')
         : new ServiceUnavailableException(err.message || 'Internal Server Error', {
-            originalError: err.name,
-            stack: err.stack,
-            timestamp: new Date().toISOString(),
-          });
+          originalError: err.name,
+          stack: err.stack,
+          timestamp: new Date().toISOString(),
+        });
       return await renderErrorView(serviceError);
     }
   }, requestInfo, undefined, { externalizeIslandProps });
