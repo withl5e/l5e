@@ -45,6 +45,15 @@ export function initTooltips(): void {
         showTooltipMobile(trigger);
       });
     } else {
+      // Keep the interaction state explicitly. Firefox can lose the
+      // `:hover` match while the lazily-loaded runtime is being evaluated,
+      // even though the pointer is still over the trigger.
+      trigger.addEventListener('pointerenter', () => {
+        trigger.setAttribute('data-tooltip-active', 'true');
+      });
+      trigger.addEventListener('pointerleave', () => {
+        trigger.removeAttribute('data-tooltip-active');
+      });
       trigger.addEventListener(
         'pointerenter',
         async () => {

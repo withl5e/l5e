@@ -88,7 +88,7 @@ export async function showTooltip(host: TooltipHost): Promise<void> {
    * Nếu vậy, việc tạo tooltip là không cần thiết và sẽ không có sự kiện
    * `pointerleave` nào được kích hoạt để ẩn tooltip.
    */
-  if (!host.matches(':hover')) return;
+  if (!host.hasAttribute('data-tooltip-active')) return;
 
   const tip = document.createElement('div');
   tip.className = 'tp';
@@ -109,7 +109,7 @@ export async function showTooltip(host: TooltipHost): Promise<void> {
   host.addEventListener('pointerleave', cleanup);
 
   // Con trỏ đã rời trước khi listener được gắn
-  if (!host.matches(':hover')) {
+  if (!host.hasAttribute('data-tooltip-active')) {
     host.removeEventListener('pointerleave', cleanup);
     tip.remove();
     return;
