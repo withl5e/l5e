@@ -430,7 +430,7 @@ async function createPageResponse({
     cdnCacheControlParts.push(`stale-while-revalidate=${swr}`);
   }
 
-  if (cacheControlParts.length > 1 && isProduction) {
+  if ((cacheControlParts.length > 0 || cdnCacheControlParts.length > 0) && isProduction) {
     cacheControlParts.push('public');
     cacheControlParts.push('must-revalidate');
 
