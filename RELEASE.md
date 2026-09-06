@@ -15,19 +15,25 @@ publish nor deploy happens if `pnpm build / test / typecheck` fails.
 
 The actual workflow lives at [`.github/workflows/release.yml`](./.github/workflows/release.yml).
 
+## 0.4.0 migration notes
+
+Version `0.4.0` moves the framework peer dependency to Vite 8 and adopts
+Vite 8's supported Node.js range. Before releasing or upgrading an existing
+application, follow [Migrating an L5E app to Vite 8](./docs-site/content/28-migrating-to-vite-8.md).
+
 ## What gets bumped — 5 files
 
 | File | Field |
 |---|---|
 | `packages/core/package.json` | `version` |
-| `packages/richtext-payload/package.json` | `version` |
+| `packages/richtext-payload/package.json` | `version` and `peerDependencies["@withl5e/l5e"]` → `^<new>` |
 | `packages/create-l5e/package.json` | `version` |
 | `packages/create-l5e/templates/basic/package.json` | `dependencies["@withl5e/l5e"]` → `^<new>` |
 | `packages/create-l5e/templates/minimal/package.json` | `dependencies["@withl5e/l5e"]` → `^<new>` |
 
 The three packages must share the same version (the release workflow
-verifies this before publishing). The two templates pin the framework
-dependency, so end users running `npm create l5e` (or `@alpha`,
+verifies this before publishing). The richtext adapter and two templates
+pin the framework dependency, so end users running `npm create l5e` (or `@alpha`,
 `@beta`, depending on which channel the release lands on) get the
 version that was just published.
 
@@ -100,11 +106,14 @@ progress on the **Actions** tab of the GitHub repo.
 
 ## Picking a version
 
-Convention is [SemVer](https://semver.org). L5E is in alpha right now,
-so the common bump is `prerelease`:
+Convention is [SemVer](https://semver.org). While L5E is pre-1.0, a breaking
+consumer requirement starts a new minor line. Use patch releases for compatible
+fixes, and prerelease keywords when validating an alpha, beta, or release candidate:
 
 | When you… | Run | Becomes |
 |---|---|---|
+| Change a required peer or runtime in a breaking way | `pnpm bump minor` | `0.3.4` → `0.4.0` |
+| Ship a compatible fix | `pnpm bump patch` | `0.3.4` → `0.3.5` |
 | Fix a bug during the current alpha cycle | `pnpm bump prerelease` | `0.1.1-alpha.2` → `0.1.1-alpha.3` |
 | Start a new alpha cycle on a new patch | `pnpm bump alpha` | `0.1.1-alpha.3` → `0.1.2-alpha.0` |
 | Promote alpha → beta | `pnpm bump beta` | `0.1.2-alpha.5` → `0.1.2-beta.0` |
@@ -248,10 +257,6 @@ pnpm bump 0.1.1-alpha.2          # whichever value you want them aligned at
 ```
 
 After this, keyword forms work again.
-
-> **Current state:** `packages/richtext-payload` is at `0.1.0-alpha.0`
-> while the other two are `0.1.1-alpha.2`. The first bump you do
-> should be an exact-version sync.
 
 ### "Tag … does not match" in CI
 

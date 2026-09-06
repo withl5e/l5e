@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && vite build --ssr src/entry-server.ts --outDir dist/server && vite build --ssr server.ts --outDir dist --emptyOutDir false",
@@ -11,7 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@withl5e/l5e": "^0.3.4",
+    "@withl5e/l5e": "^0.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
