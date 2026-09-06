@@ -15,9 +15,9 @@ publish nor deploy happens if `pnpm build / test / typecheck` fails.
 
 The actual workflow lives at [`.github/workflows/release.yml`](./.github/workflows/release.yml).
 
-## 1.0.0 migration notes
+## 1.0.0-alpha.0 migration notes
 
-Version `1.0.0` moves the framework peer dependency to Vite 8, adopts Vite 8's
+Version `1.0.0-alpha.0` moves the framework peer dependency to Vite 8, adopts Vite 8's
 supported Node.js range, and replaces Rollup with Rolldown for L5E's runtime
 bundling. L5E owns the direct Rolldown dependency; application packages only need
 to upgrade L5E and Vite. Existing application configs that list `rollup` in

@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@withl5e/l5e": "^1.0.0",
+    "@withl5e/l5e": "^1.0.0-alpha.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
