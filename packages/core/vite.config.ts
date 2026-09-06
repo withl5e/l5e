@@ -11,41 +11,45 @@ const externalPackages = [
   'request-ip',
   'react',
   'react-dom',
-  'rollup',
+  'rolldown',
   'sirv',
   'vite',
 ];
 
 export default defineConfig({
-  esbuild: {
-    jsxFactory: 'jsxFactory',
-    jsxFragment: '__Fragment',
+  oxc: {
+    include: /\.[jt]sx$/,
+    jsx: {
+      runtime: 'classic',
+      pragma: '__l5eJsxFactory',
+      pragmaFrag: '__l5eFragment',
+    },
     jsxInject:
-      'import { Fragment as __Fragment, jsxFactory } from "@withl5e/l5e/jsx-runtime";',
+      'import { Fragment as __l5eFragment, jsxFactory as __l5eJsxFactory } from "@withl5e/l5e/jsx-runtime";',
   },
   build: {
     lib: {
       entry: {
-        index: resolve(__dirname, 'index.ts'),
-        'jsx-runtime': resolve(__dirname, 'src/core/jsx-runtime.ts'),
-        'vite-plugin': resolve(__dirname, 'src/core/vite-plugin.ts'),
-        server: resolve(__dirname, 'src/core/server.ts'),
-        'entry-server': resolve(__dirname, 'src/core/entry-server.ts'),
-        middleware: resolve(__dirname, 'src/middleware/index.ts'),
-        tooltip: resolve(__dirname, 'src/tooltip/index.ts'),
-        seo: resolve(__dirname, 'src/seo/index.ts'),
-        swap: resolve(__dirname, 'src/swap/index.ts'),
-        'swap/server': resolve(__dirname, 'src/swap/server.ts'),
-        action: resolve(__dirname, 'src/action/index.ts'),
-        island: resolve(__dirname, 'src/island/index.ts'),
-        'island/client': resolve(__dirname, 'src/island/client.ts'),
-        'island/runtime': resolve(__dirname, 'src/island/runtime.ts'),
-        router: resolve(__dirname, 'src/router/index.ts'),
-        i18n: resolve(__dirname, 'src/i18n/index.ts'),
+        index: resolve(import.meta.dirname, 'index.ts'),
+        'jsx-runtime': resolve(import.meta.dirname, 'src/core/jsx-runtime.ts'),
+        'vite-plugin': resolve(import.meta.dirname, 'src/core/vite-plugin.ts'),
+        server: resolve(import.meta.dirname, 'src/core/server.ts'),
+        'entry-server': resolve(import.meta.dirname, 'src/core/entry-server.ts'),
+        middleware: resolve(import.meta.dirname, 'src/middleware/index.ts'),
+        tooltip: resolve(import.meta.dirname, 'src/tooltip/index.ts'),
+        seo: resolve(import.meta.dirname, 'src/seo/index.ts'),
+        swap: resolve(import.meta.dirname, 'src/swap/index.ts'),
+        'swap/server': resolve(import.meta.dirname, 'src/swap/server.ts'),
+        action: resolve(import.meta.dirname, 'src/action/index.ts'),
+        island: resolve(import.meta.dirname, 'src/island/index.ts'),
+        'island/client': resolve(import.meta.dirname, 'src/island/client.ts'),
+        'island/runtime': resolve(import.meta.dirname, 'src/island/runtime.ts'),
+        router: resolve(import.meta.dirname, 'src/router/index.ts'),
+        i18n: resolve(import.meta.dirname, 'src/i18n/index.ts'),
       },
       formats: ['es'],
     },
-    rollupOptions: {
+    rolldownOptions: {
       external: (id) => {
         if (id.startsWith('virtual:')) return true;
         if (id.startsWith('node:')) return true;

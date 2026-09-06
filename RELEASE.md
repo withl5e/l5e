@@ -1,33 +1,47 @@
 # Release process
 
-L5E releases are triggered by pushing a `v*` git tag. A single tag fires
-two automated flows:
+L5E releases are triggered by pushing a `v*` git tag. Every tag publishes
+three packages to npm under the matching dist-tag (`alpha`, `beta`, `next`,
+or `latest`). Stable tags also build and deploy the docs site: the Docker image
+is pushed to the GitHub Container Registry (ghcr.io), the Swarm service
+`l5e_docs` is rolled onto the new image, and the Cloudflare cache tag `global`
+is purged. Prerelease tags do not change the production docs deployment.
 
-1. **Publish to npm** — three packages go out under their matching
-   dist-tag (`alpha`, `beta`, `next`, or `latest`).
-2. **Build & deploy the docs site** — Docker image is pushed to the
-   GitHub Container Registry (ghcr.io), the Swarm service `l5e_docs`
-   is rolled onto the new image, and the Cloudflare cache tag `global`
-   is purged.
-
-Both flows are gated by a `test` job that mirrors `ci.yml` — neither
-publish nor deploy happens if `pnpm build / test / typecheck` fails.
+Both release jobs are gated by a `test` job that mirrors `ci.yml` — no
+publish or stable deploy happens if `pnpm build / test / typecheck` fails.
 
 The actual workflow lives at [`.github/workflows/release.yml`](./.github/workflows/release.yml).
+
+## 1.0.0 migration notes
+
+Version `1.0.0` moves the framework peer dependency to Vite 8, adopts Vite 8's
+supported Node.js range, and replaces Rollup with Rolldown for L5E's runtime
+bundling. L5E owns the direct Rolldown dependency; application packages only need
+to upgrade L5E and Vite. Existing application configs that list `rollup` in
+`ssr.external` must replace it with `rolldown`. The framework still uses `esbuild`
+intentionally. The standalone templates therefore include a `pnpm-workspace.yaml`
+with `packages: []` and `allowBuilds.esbuild: true`; pnpm 11 ignores the former
+`package.json` `pnpm.onlyBuiltDependencies` setting. Existing monorepos must merge
+that allowlist into their real workspace root without replacing package globs. The
+release checks use pnpm 11.0.9 with Node.js 22; local consumer validation used
+Node.js 22.23.2. The same `allowBuilds` schema is available in pnpm 10.26+ for
+Node.js 20.19 consumers, but pnpm 10.26 is not part of this release's tested matrix.
+Before releasing or upgrading an existing application, follow
+[Migrating an L5E app to Vite 8](./docs-site/content/28-migrating-to-vite-8.md).
 
 ## What gets bumped — 5 files
 
 | File | Field |
 |---|---|
 | `packages/core/package.json` | `version` |
-| `packages/richtext-payload/package.json` | `version` |
+| `packages/richtext-payload/package.json` | `version` and `peerDependencies["@withl5e/l5e"]` → `^<new>` |
 | `packages/create-l5e/package.json` | `version` |
 | `packages/create-l5e/templates/basic/package.json` | `dependencies["@withl5e/l5e"]` → `^<new>` |
 | `packages/create-l5e/templates/minimal/package.json` | `dependencies["@withl5e/l5e"]` → `^<new>` |
 
 The three packages must share the same version (the release workflow
-verifies this before publishing). The two templates pin the framework
-dependency, so end users running `npm create l5e` (or `@alpha`,
+verifies this before publishing). The richtext adapter and two templates
+pin the framework dependency, so end users running `npm create l5e` (or `@alpha`,
 `@beta`, depending on which channel the release lands on) get the
 version that was just published.
 
@@ -90,25 +104,30 @@ git push origin v<version>
 Once the tag is pushed, `.github/workflows/release.yml` runs:
 
 ```
-            ┌─ publish-npm ──┐
-test ──────→│                ├──→ done
-            └─ deploy-docker ┘
+            ┌─ publish-npm ────────────────┐
+test ──────→│                              ├──→ done
+            └─ deploy-docker (stable only) ┘
 ```
 
-The two release jobs run in parallel after the test gate. Watch the
+The applicable release jobs run in parallel after the test gate. Watch the
 progress on the **Actions** tab of the GitHub repo.
 
 ## Picking a version
 
-Convention is [SemVer](https://semver.org). L5E is in alpha right now,
-so the common bump is `prerelease`:
+Convention is [SemVer](https://semver.org). From `1.0.0` onward, breaking changes
+start a new major line, backward-compatible features bump the minor version, and
+compatible fixes bump the patch version. Use prerelease keywords when validating an
+alpha, beta, or release candidate:
 
 | When you… | Run | Becomes |
 |---|---|---|
+| Change a required peer or runtime in a breaking way | `pnpm bump major` | `1.0.0` → `2.0.0` |
+| Ship a backward-compatible feature | `pnpm bump minor` | `1.0.0` → `1.1.0` |
+| Ship a compatible fix | `pnpm bump patch` | `1.0.0` → `1.0.1` |
 | Fix a bug during the current alpha cycle | `pnpm bump prerelease` | `0.1.1-alpha.2` → `0.1.1-alpha.3` |
 | Start a new alpha cycle on a new patch | `pnpm bump alpha` | `0.1.1-alpha.3` → `0.1.2-alpha.0` |
 | Promote alpha → beta | `pnpm bump beta` | `0.1.2-alpha.5` → `0.1.2-beta.0` |
-| Cut the first stable release | `pnpm bump patch` | `0.1.0-rc.4` → `0.1.0` |
+| Cut the first stable release | `pnpm bump 1.0.0` | `1.0.0-rc.4` → `1.0.0` |
 
 ## NPM dist-tags
 
@@ -135,7 +154,7 @@ pnpm test
 pnpm typecheck
 ```
 
-If any step fails, neither `publish-npm` nor `deploy-docker` runs.
+If any step fails, neither `publish-npm` nor the stable-only `deploy-docker` job runs.
 
 ### `publish-npm`
 
@@ -148,6 +167,10 @@ If any step fails, neither `publish-npm` nor `deploy-docker` runs.
    `NODE_AUTH_TOKEN=${secrets.NPM_TOKEN}`.
 
 ### `deploy-docker`
+
+This job runs only for stable tags without a prerelease suffix. Alpha, beta,
+and release-candidate tags publish packages to npm and skip the production docs
+image, Swarm deployment, and Cloudflare purge.
 
 1. `docker buildx` builds [`docs-site/Dockerfile`](./docs-site/Dockerfile)
    from the repo root.
@@ -214,9 +237,9 @@ ssh <user>@<vps> "docker stack deploy -c ~/l5e-docs.yml l5e --with-registry-auth
 > Publish visibility once after the first push: GitHub → your profile
 > → Packages → `l5e` → Package settings → Change visibility → Public.
 
-After bootstrap, the release workflow just runs
+After bootstrap, each stable release runs
 `docker service update --image … --with-registry-auth --force l5e_docs`
-on each tag — no need to re-deploy the stack unless the compose file
+— no need to re-deploy the stack unless the compose file
 itself changes (ports, healthcheck, resource limits, etc).
 
 ## Cloudflare cache-tag setup
@@ -248,10 +271,6 @@ pnpm bump 0.1.1-alpha.2          # whichever value you want them aligned at
 ```
 
 After this, keyword forms work again.
-
-> **Current state:** `packages/richtext-payload` is at `0.1.0-alpha.0`
-> while the other two are `0.1.1-alpha.2`. The first bump you do
-> should be an exact-version sync.
 
 ### "Tag … does not match" in CI
 

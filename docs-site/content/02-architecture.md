@@ -81,9 +81,9 @@ scripts the response needs — they're sitting in the per-request registries. It
 entries into one hashed chunk each, served from an in-memory map.
 
 Because this runs on the request path, concurrent requests can ask for the same chunk
-before it exists. Each distinct entry set gets exactly one Rollup run, which every
+before it exists. Each distinct entry set gets exactly one Rolldown run, which every
 waiting request shares; a run that fails is not cached, so the next request retries.
-Nothing is written to disk along the way — the Rollup entry is a virtual module, and
+Nothing is written to disk along the way — the Rolldown entry is a virtual module, and
 the finished chunk lives only in the in-memory map. A bundle URL the current process
 never built (a stale link from an earlier process, say) has no file to fall back to and
 returns 404.
@@ -160,7 +160,7 @@ different.
 
 `@withl5e/l5e/vite-plugin` does the work that can't happen at request time. The key
 move for bundling: it scans every view for literal `useCss('…')` / `useClientJs('…')`
-arguments and turns **each one into its own Rollup input**, so the client build emits
+arguments and turns **each one into its own Rolldown input**, so the client build emits
 one ready-to-serve target per asset. At request time the runtime only *merges* those
 prebuilt targets — it never compiles your source per request.
 
@@ -173,7 +173,7 @@ prebuilt targets — it never compiles your source per request.
     </div>
     <span class="l5e-diag__arrow" aria-hidden="true">▶</span>
     <div class="l5e-diag__node">
-      <span class="l5e-diag__kicker">rollup inputs</span>
+      <span class="l5e-diag__kicker">rolldown inputs</span>
       <span class="l5e-diag__title">one target per entry</span>
       <span class="l5e-diag__desc">Each <code>useCss</code> / <code>useClientJs</code> file becomes its own built artifact in <code>dist/client</code>.</span>
     </div>
@@ -223,5 +223,5 @@ returned HTML fragment is what [[18-swap-and-action]] swaps into the DOM.
 | Asset delivery | Vite middleware (HMR, transforms) | sirv static + in-memory bundle map |
 | `Cache-Control` | Not emitted | Emitted from loader `maxAge`/`sMaxAge`/`swr` |
 | `Cache-Tag` | Always emitted as `global,…` | Same, but non-`global` tags are hashed (`global,1u7gb,…`) |
-| Bundling | Off — Vite serves each entry | On — Rollup merges per request |
+| Bundling | Off — Vite serves each entry | On — Rolldown merges per request |
 | Action registry | Read from `virtual:l5e-actions` | Read from `dist/server/action-registry.json` |

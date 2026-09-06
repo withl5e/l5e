@@ -15,12 +15,12 @@ L5E started as one team's answer to a content-site problem and was only open-sou
 - **Proven in production — *shipped*.** Ran on three public content sites with stable indexing and healthy Core Web Vitals before any of it was published.
 - **Forked to open source — *shipped*.** The portable core — runtime, router, per-request bundler — extracted out, site-specific glue left behind.
 - **Documentation — *in progress*.** This site: runtime, routing, styling/interactivity primitives, and the SEO story, filled in as the public API settles.
+- **Rolldown + Vite 8 — *implemented for 1.0.0*.** The build and per-request bundler now use Rolldown, with Vite 8 and Oxc completing the unified toolchain.
 
 ## What is next
 
 - **Starter templates — *planned*.** A working skeleton — install flow, structure, a few views, caching defaults wired up — to clone and edit, not a kitchen-sink boilerplate.
 - **Showcase sites — *planned*.** Two reference builds that double as living docs: a news/content site (cache-friendly pages, search, sitemaps) and an e-commerce storefront (block-builder layouts, islands + client-JS for cart/filters).
-- **Rolldown + Vite 8 — *planned*.** Migrate the build and per-request bundler onto Rolldown (Vite 8's Rust bundler) for faster builds and a single bundling path.
 
 ---
 

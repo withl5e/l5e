@@ -85,6 +85,7 @@ COPY --from=builder --chown=docs:nodejs /app/docs-site/package.json ./docs-site/
 COPY --from=builder --chown=docs:nodejs /app/packages/core/dist        ./packages/core/dist
 COPY --from=builder --chown=docs:nodejs /app/packages/core/src         ./packages/core/src
 COPY --from=builder --chown=docs:nodejs /app/packages/core/package.json ./packages/core/package.json
+COPY --from=builder --chown=docs:nodejs /app/packages/core/node_modules ./packages/core/node_modules
 
 # node_modules (root + docs-site) — the runtime needs Express, sirv,
 # compression, marked, shiki, minisearch, etc.

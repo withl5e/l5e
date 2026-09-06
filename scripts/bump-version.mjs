@@ -15,6 +15,7 @@
  *
  * Touches 5 files:
  *   - 3 publishable packages: their `version` field
+ *   - richtext-payload: its `@withl5e/l5e` peer dependency pin
  *   - 2 create-l5e templates: their `@withl5e/l5e` dependency pin (^<new>)
  *
  * Source of truth for the current version is packages/core/package.json.
@@ -45,6 +46,8 @@ const TEMPLATE_FILES = [
   'packages/create-l5e/templates/basic/package.json',
   'packages/create-l5e/templates/minimal/package.json',
 ];
+
+const RICHTEXT_PACKAGE = 'packages/richtext-payload/package.json';
 
 const FRAMEWORK_DEP = '@withl5e/l5e';
 
@@ -190,8 +193,15 @@ if (KEYWORDS.has(arg)) {
   }
 }
 
-// Only short-circuit when everything is already at the target.
-const allAtTarget = currentVersions.every((c) => c.version === nextVersion);
+const nextPin = `^${nextVersion}`;
+
+// Only short-circuit when versions and internal dependency pins are all current.
+const allAtTarget =
+  currentVersions.every((c) => c.version === nextVersion) &&
+  readJson(RICHTEXT_PACKAGE).peerDependencies?.[FRAMEWORK_DEP] === nextPin &&
+  TEMPLATE_FILES.every(
+    (rel) => readJson(rel).dependencies?.[FRAMEWORK_DEP] === nextPin,
+  );
 if (allAtTarget) {
   console.error(`❌ Nothing to do — all packages are already at ${nextVersion}`);
   process.exit(1);
@@ -208,8 +218,17 @@ for (const rel of PACKAGE_FILES) {
   console.log(`  version  ${rel}  ${before} → ${nextVersion}`);
 }
 
+// Keep the published richtext adapter compatible with this release line.
+{
+  const j = readJson(RICHTEXT_PACKAGE);
+  const before = j.peerDependencies?.[FRAMEWORK_DEP];
+  if (!j.peerDependencies) j.peerDependencies = {};
+  j.peerDependencies[FRAMEWORK_DEP] = nextPin;
+  writeJson(RICHTEXT_PACKAGE, j);
+  console.log(`  peer     ${RICHTEXT_PACKAGE}  ${before} → ${nextPin}`);
+}
+
 // Apply to template dependency pins (^<next>)
-const nextPin = `^${nextVersion}`;
 for (const rel of TEMPLATE_FILES) {
   const j = readJson(rel);
   if (!j.dependencies || !j.dependencies[FRAMEWORK_DEP]) {

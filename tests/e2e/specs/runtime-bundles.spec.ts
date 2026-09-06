@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 // Runtime bundling happens on the request path, so several requests can race to
 // build the same chunk. bundleScripts()/bundleCss() dedupe those into a single
-// rollup run and keep no temp files on disk; these specs assert the observable
+// Rolldown run and keep no temp files on disk; these specs assert the observable
 // contract: concurrent requests agree on one bundle URL, that URL serves, and
 // an unknown bundle URL 404s instead of being cached as immutable.
 const ASSET_TAG = /<(?:script[^>]+src|link[^>]+href)="([^"]+)"/g;

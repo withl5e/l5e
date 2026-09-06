@@ -16,7 +16,7 @@ import { coreVite } from '@withl5e/l5e/vite-plugin';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  esbuild: { jsx: 'preserve' },
+  oxc: { jsx: 'preserve' },
   plugins: [coreVite()],
 });
 ```
