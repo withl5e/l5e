@@ -1,17 +1,14 @@
 # Release process
 
-L5E releases are triggered by pushing a `v*` git tag. A single tag fires
-two automated flows:
+L5E releases are triggered by pushing a `v*` git tag. Every tag publishes
+three packages to npm under the matching dist-tag (`alpha`, `beta`, `next`,
+or `latest`). Stable tags also build and deploy the docs site: the Docker image
+is pushed to the GitHub Container Registry (ghcr.io), the Swarm service
+`l5e_docs` is rolled onto the new image, and the Cloudflare cache tag `global`
+is purged. Prerelease tags do not change the production docs deployment.
 
-1. **Publish to npm** — three packages go out under their matching
-   dist-tag (`alpha`, `beta`, `next`, or `latest`).
-2. **Build & deploy the docs site** — Docker image is pushed to the
-   GitHub Container Registry (ghcr.io), the Swarm service `l5e_docs`
-   is rolled onto the new image, and the Cloudflare cache tag `global`
-   is purged.
-
-Both flows are gated by a `test` job that mirrors `ci.yml` — neither
-publish nor deploy happens if `pnpm build / test / typecheck` fails.
+Both release jobs are gated by a `test` job that mirrors `ci.yml` — no
+publish or stable deploy happens if `pnpm build / test / typecheck` fails.
 
 The actual workflow lives at [`.github/workflows/release.yml`](./.github/workflows/release.yml).
 
@@ -107,12 +104,12 @@ git push origin v<version>
 Once the tag is pushed, `.github/workflows/release.yml` runs:
 
 ```
-            ┌─ publish-npm ──┐
-test ──────→│                ├──→ done
-            └─ deploy-docker ┘
+            ┌─ publish-npm ────────────────┐
+test ──────→│                              ├──→ done
+            └─ deploy-docker (stable only) ┘
 ```
 
-The two release jobs run in parallel after the test gate. Watch the
+The applicable release jobs run in parallel after the test gate. Watch the
 progress on the **Actions** tab of the GitHub repo.
 
 ## Picking a version
@@ -157,7 +154,7 @@ pnpm test
 pnpm typecheck
 ```
 
-If any step fails, neither `publish-npm` nor `deploy-docker` runs.
+If any step fails, neither `publish-npm` nor the stable-only `deploy-docker` job runs.
 
 ### `publish-npm`
 
@@ -170,6 +167,10 @@ If any step fails, neither `publish-npm` nor `deploy-docker` runs.
    `NODE_AUTH_TOKEN=${secrets.NPM_TOKEN}`.
 
 ### `deploy-docker`
+
+This job runs only for stable tags without a prerelease suffix. Alpha, beta,
+and release-candidate tags publish packages to npm and skip the production docs
+image, Swarm deployment, and Cloudflare purge.
 
 1. `docker buildx` builds [`docs-site/Dockerfile`](./docs-site/Dockerfile)
    from the repo root.
@@ -236,9 +237,9 @@ ssh <user>@<vps> "docker stack deploy -c ~/l5e-docs.yml l5e --with-registry-auth
 > Publish visibility once after the first push: GitHub → your profile
 > → Packages → `l5e` → Package settings → Change visibility → Public.
 
-After bootstrap, the release workflow just runs
+After bootstrap, each stable release runs
 `docker service update --image … --with-registry-auth --force l5e_docs`
-on each tag — no need to re-deploy the stack unless the compose file
+— no need to re-deploy the stack unless the compose file
 itself changes (ports, healthcheck, resource limits, etc).
 
 ## Cloudflare cache-tag setup

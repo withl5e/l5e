@@ -6,7 +6,7 @@
 #   publish-npm   — needs: test. Verifies the tag's version matches
 #                   packages/core/package.json, derives an npm dist-tag from
 #                   the prerelease suffix, and runs `pnpm -r publish`.
-#   deploy-docker — needs: test. Builds docs-site/Dockerfile, pushes to
+#   deploy-docker — stable tags only. Builds docs-site/Dockerfile, pushes to
 #                   GitHub Container Registry (ghcr.io), rolls the Swarm
 #                   service `l5e_docs` via `docker service update`, then
 #                   purges the Cloudflare `global` cache tag.
@@ -147,6 +147,8 @@ jobs:
   deploy-docker:
     name: Build & deploy docs image
     needs: test
+    # Prereleases publish to npm without replacing the production docs image.
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
