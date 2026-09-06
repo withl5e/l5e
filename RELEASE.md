@@ -15,9 +15,9 @@ publish nor deploy happens if `pnpm build / test / typecheck` fails.
 
 The actual workflow lives at [`.github/workflows/release.yml`](./.github/workflows/release.yml).
 
-## 0.4.0 migration notes
+## 1.0.0 migration notes
 
-Version `0.4.0` moves the framework peer dependency to Vite 8, adopts Vite 8's
+Version `1.0.0` moves the framework peer dependency to Vite 8, adopts Vite 8's
 supported Node.js range, and replaces Rollup with Rolldown for L5E's runtime
 bundling. L5E owns the direct Rolldown dependency; application packages only need
 to upgrade L5E and Vite. Existing application configs that list `rollup` in
@@ -117,18 +117,20 @@ progress on the **Actions** tab of the GitHub repo.
 
 ## Picking a version
 
-Convention is [SemVer](https://semver.org). While L5E is pre-1.0, a breaking
-consumer requirement starts a new minor line. Use patch releases for compatible
-fixes, and prerelease keywords when validating an alpha, beta, or release candidate:
+Convention is [SemVer](https://semver.org). From `1.0.0` onward, breaking changes
+start a new major line, backward-compatible features bump the minor version, and
+compatible fixes bump the patch version. Use prerelease keywords when validating an
+alpha, beta, or release candidate:
 
 | When you… | Run | Becomes |
 |---|---|---|
-| Change a required peer or runtime in a breaking way | `pnpm bump minor` | `0.3.4` → `0.4.0` |
-| Ship a compatible fix | `pnpm bump patch` | `0.3.4` → `0.3.5` |
+| Change a required peer or runtime in a breaking way | `pnpm bump major` | `1.0.0` → `2.0.0` |
+| Ship a backward-compatible feature | `pnpm bump minor` | `1.0.0` → `1.1.0` |
+| Ship a compatible fix | `pnpm bump patch` | `1.0.0` → `1.0.1` |
 | Fix a bug during the current alpha cycle | `pnpm bump prerelease` | `0.1.1-alpha.2` → `0.1.1-alpha.3` |
 | Start a new alpha cycle on a new patch | `pnpm bump alpha` | `0.1.1-alpha.3` → `0.1.2-alpha.0` |
 | Promote alpha → beta | `pnpm bump beta` | `0.1.2-alpha.5` → `0.1.2-beta.0` |
-| Cut the first stable release | `pnpm bump patch` | `0.1.0-rc.4` → `0.1.0` |
+| Cut the first stable release | `pnpm bump 1.0.0` | `1.0.0-rc.4` → `1.0.0` |
 
 ## NPM dist-tags
 
