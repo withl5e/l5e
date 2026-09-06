@@ -21,6 +21,11 @@ in CI:
 node --version
 ```
 
+pnpm 11 itself requires Node.js 22.13 or newer. Projects that stay on Node.js 20.19
+can use a supported pnpm 10 release; the `allowBuilds` setting described below is
+available from pnpm 10.26. The L5E 0.4 release checks use pnpm 11, so pnpm 10.26 is a
+compatible configuration path rather than part of the tested release matrix.
+
 Keep the same package manager and lockfile that the project already uses. With pnpm,
 for example, update the framework package and Vite with:
 
@@ -72,6 +77,15 @@ the project does not depend on deprecated options. In `vite.config.ts` or
    },
 ```
 
+If the older config lists Rollup as an SSR external, replace that entry as well:
+
+```diff
+   ssr: {
+-    external: ['rollup', 'esbuild', 'fsevents'],
++    external: ['rolldown', 'esbuild', 'fsevents'],
+   },
+```
+
 The L5E templates only need `oxc: { jsx: 'preserve' }`. Only add `jsxInject` to files
 that actually contain JSX. A library config that injects the L5E JSX runtime should use
 `include: /\.[jt]sx$/` together with the runtime import. This scope matters: injecting a
@@ -80,32 +94,43 @@ modules into a browser bundle.
 Keep existing `optimizeDeps.esbuildOptions` only when a plugin still requires it; Vite
 8 can convert it, but `optimizeDeps.rolldownOptions` is the long-term form.
 
-Do not mechanically rename every occurrence of “Rollup” in application code. A plugin
-that uses the stable Vite/Rollup hook API can continue to work, while code that relies
-on a specific Rollup implementation detail or bundle mutation needs its own test.
+The `ssr.external` change applies only when the application config explicitly lists
+L5E's runtime bundler. Do not rename Rollup-specific option names exposed by a third-party
+plugin; update that plugin and follow its Vite 8 migration instructions instead.
 
 ## Check esbuild users and plugins
 
-Vite 8 uses Oxc and Rolldown internally. It no longer uses esbuild directly for its
-main transform and bundle pipeline. L5E 0.4 still directly uses `esbuild` in its core
-runtime, so an L5E app should keep the package and its install allowlist. Separately,
-if another application plugin calls `transformWithEsbuild`, keep `esbuild` as an
-explicit dev dependency and plan a move to `transformWithOxc` when that plugin supports
-it. The package is also needed when the application itself imports an esbuild API.
+Vite 8 uses Oxc and Rolldown internally. L5E 0.4 also owns its direct `rolldown`
+dependency for runtime bundling, so application packages should not add Rolldown
+themselves. L5E intentionally keeps `esbuild` for its own JSX transform path, which is
+separate from Vite's deprecated esbuild compatibility options. If another application
+plugin calls `transformWithEsbuild`, keep `esbuild` as an explicit dev dependency and
+plan a move to `transformWithOxc` when that plugin supports it.
 
-If the project uses pnpm, retain the template's allowlist entry so esbuild's install
-script can run:
+If the project uses pnpm 11, replace any `pnpm.onlyBuiltDependencies` entry in
+`package.json`; pnpm 11 no longer uses that package-level build allowlist. Put the
+modern allowlist in `pnpm-workspace.yaml` at the actual workspace root so esbuild's
+install script can run:
 
-```json
-{
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
-  }
-}
+```yaml
+allowBuilds:
+  esbuild: true
 ```
 
-Do not add this setting when the project does not install esbuild. Review the actual
-dependency tree with `pnpm why esbuild` (or the equivalent command for your manager).
+For an existing monorepo, merge `allowBuilds.esbuild: true` into its root workspace
+file and preserve the current `packages` globs and other settings. A standalone app
+created by `create-l5e` includes this complete workspace file:
+
+```yaml
+packages: []
+
+allowBuilds:
+  esbuild: true
+```
+
+The empty package list keeps a standalone generated app rooted in its own workspace
+instead of inheriting a workspace from a parent directory. Keep the esbuild allowlist
+even after replacing `rollup` with `rolldown` in `ssr.external`.
 
 ## Verify the L5E pipeline
 

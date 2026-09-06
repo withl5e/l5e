@@ -17,9 +17,20 @@ The actual workflow lives at [`.github/workflows/release.yml`](./.github/workflo
 
 ## 0.4.0 migration notes
 
-Version `0.4.0` moves the framework peer dependency to Vite 8 and adopts
-Vite 8's supported Node.js range. Before releasing or upgrading an existing
-application, follow [Migrating an L5E app to Vite 8](./docs-site/content/28-migrating-to-vite-8.md).
+Version `0.4.0` moves the framework peer dependency to Vite 8, adopts Vite 8's
+supported Node.js range, and replaces Rollup with Rolldown for L5E's runtime
+bundling. L5E owns the direct Rolldown dependency; application packages only need
+to upgrade L5E and Vite. Existing application configs that list `rollup` in
+`ssr.external` must replace it with `rolldown`. The framework still uses `esbuild`
+intentionally. The standalone templates therefore include a `pnpm-workspace.yaml`
+with `packages: []` and `allowBuilds.esbuild: true`; pnpm 11 ignores the former
+`package.json` `pnpm.onlyBuiltDependencies` setting. Existing monorepos must merge
+that allowlist into their real workspace root without replacing package globs. The
+release checks use pnpm 11.0.9 with Node.js 22; local consumer validation used
+Node.js 22.23.2. The same `allowBuilds` schema is available in pnpm 10.26+ for
+Node.js 20.19 consumers, but pnpm 10.26 is not part of this release's tested matrix.
+Before releasing or upgrading an existing application, follow
+[Migrating an L5E app to Vite 8](./docs-site/content/28-migrating-to-vite-8.md).
 
 ## What gets bumped — 5 files
 

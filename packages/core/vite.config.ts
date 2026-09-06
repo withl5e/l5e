@@ -11,7 +11,7 @@ const externalPackages = [
   'request-ip',
   'react',
   'react-dom',
-  'rollup',
+  'rolldown',
   'sirv',
   'vite',
 ];

@@ -19,6 +19,13 @@ Available templates:
 - `basic`: example app with middleware rewrite, loader cache headers, action and swap interaction
 - `minimal`: small app with one server-rendered page
 
+Each standalone template includes a root `pnpm-workspace.yaml` with `packages: []`
+and `allowBuilds.esbuild: true`. This lets pnpm 10.26+ run esbuild's required install
+script and prevents the generated app from inheriting a workspace in a parent
+directory. If you move the app into an existing monorepo, merge
+`allowBuilds.esbuild: true` into that monorepo's root workspace file while preserving
+its existing `packages` patterns.
+
 Run the dev server immediately after install:
 
 ```sh

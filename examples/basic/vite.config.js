@@ -29,7 +29,7 @@ export default defineConfig({
   },
   ssr: {
     noExternal: ['@withl5e/l5e'],
-    external: ['rollup', 'esbuild', 'fsevents'],
+    external: ['rolldown', 'esbuild', 'fsevents'],
   },
   resolve: {
     conditions: ['development', 'default'],

@@ -4,27 +4,29 @@ import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { OutputOptions, Plugin, RollupOptions } from 'rollup';
+import type { InputOptions, OutputChunk, OutputOptions, Plugin } from 'rolldown';
 
-let rollupModulePromise: Promise<typeof import('rollup')> | null = null;
+let rolldownModulePromise: Promise<typeof import('rolldown')> | null = null;
 
 /**
- * Resolve rollup lazily. We can't `import 'rollup'` directly because when the
- * framework gets bundled into the consumer's SSR output the bare specifier is
- * hoisted to a static import that pnpm doesn't satisfy. Resolve through `vite`
- * instead — vite is a peer dep so it's always installed, and it always ships
- * rollup as a direct dependency.
+ * Resolve Rolldown lazily from the installed framework package. A bare static
+ * import can be hoisted when the framework is bundled into a consumer's SSR
+ * output, which breaks pnpm's strict dependency layout. Anchoring resolution at
+ * @withl5e/l5e keeps the runtime dependency owned by the package that declares it.
  */
-function loadRollup(): Promise<typeof import('rollup')> {
-  if (!rollupModulePromise) {
-    rollupModulePromise = (async () => {
+function loadRolldown(): Promise<typeof import('rolldown')> {
+  if (!rolldownModulePromise) {
+    rolldownModulePromise = (async () => {
       const require = createRequire(import.meta.url);
-      const vitePath = require.resolve('vite');
-      const rollupPath = require.resolve('rollup', { paths: [path.dirname(vitePath)] });
-      return (await import(pathToFileURL(rollupPath).href)) as typeof import('rollup');
+      const frameworkEntry = require.resolve('@withl5e/l5e/server');
+      const frameworkRequire = createRequire(frameworkEntry);
+      const rolldownPath = frameworkRequire.resolve('rolldown');
+      return (await import(
+        /* @vite-ignore */ pathToFileURL(rolldownPath).href
+      )) as typeof import('rolldown');
     })();
   }
-  return rollupModulePromise;
+  return rolldownModulePromise;
 }
 
 interface BundledFile {
@@ -76,13 +78,13 @@ function generateHash(content: string): string {
   return createHash('sha256').update(content).digest('hex').substring(0, 16);
 }
 
-// Rollup coi id bắt đầu bằng \0 là virtual — nó sẽ không cố đọc từ đĩa.
+// Rolldown coi id bắt đầu bằng \0 là virtual — nó sẽ không cố đọc từ đĩa.
 const VIRTUAL_ENTRY_ID = '\0l5e:bundle-entry';
 
 /**
  * Entry của mỗi lần bundle chỉ là một danh sách import. Giữ nó trong memory thay
  * vì ghi ra đĩa: hai request đồng thời cùng một tập script sinh ra cùng nội dung
- * entry, nên file tạm dùng chung path sẽ bị request này xoá trong lúc rollup của
+ * entry, nên file tạm dùng chung path sẽ bị request này xoá trong lúc Rolldown của
  * request kia còn đang đọc.
  */
 function virtualEntryPlugin(entryContent: string): Plugin {
@@ -119,12 +121,15 @@ function vendorPathRewriterPlugin(distClientDir: string): Plugin {
 
       if (path.isAbsolute(source)) {
         // e.g. C:\...\dist\client\assets\vendor-react-XXX.js -> /assets/vendor-react-XXX.js
-        return { id: toWebPath(source), external: true };
+        return { id: toWebPath(source), external: 'absolute' };
       }
 
       if (importer && source.startsWith('.')) {
         // Relative path như ./auth.global-BOVr81Z5.js — resolve từ importer
-        return { id: toWebPath(path.resolve(path.dirname(importer), source)), external: true };
+        return {
+          id: toWebPath(path.resolve(path.dirname(importer), source)),
+          external: 'absolute',
+        };
       }
 
       return null;
@@ -145,9 +150,16 @@ async function runScriptBundle(
     })
     .join('\n');
 
-  const rollupOptions: RollupOptions = {
+  const rolldownOptions: InputOptions = {
     input: VIRTUAL_ENTRY_ID,
     plugins: [virtualEntryPlugin(entryContent), vendorPathRewriterPlugin(distClientDir)],
+    platform: 'neutral',
+    tsconfig: false,
+    // Runtime scripts are imported for their side effects. Do not let an app's
+    // package.json sideEffects flag erase those entry imports.
+    // Rolldown 1.2 still consults package metadata for boolean `true`, so use
+    // an explicit callback to override consumer `sideEffects: false`.
+    treeshake: { moduleSideEffects: () => true },
     external: (id) => {
       // External node_modules
       if (!id.startsWith('.') && !path.isAbsolute(id) && id !== VIRTUAL_ENTRY_ID) {
@@ -161,13 +173,14 @@ async function runScriptBundle(
 
   const outputOptions: OutputOptions = {
     format: 'es',
-    inlineDynamicImports: false,
+    codeSplitting: true,
+    minify: false,
     entryFileNames: 'bundle-[hash].js',
     chunkFileNames: 'bundle-[hash].js',
   };
 
-  const { rollup } = await loadRollup();
-  const bundle = await rollup(rollupOptions);
+  const { rolldown } = await loadRolldown();
+  const bundle = await rolldown(rolldownOptions);
   let output;
   try {
     ({ output } = await bundle.generate(outputOptions));
@@ -187,9 +200,12 @@ async function runScriptBundle(
     });
   }
 
-  const entryChunk = output[0];
-  if (entryChunk?.type !== 'chunk') {
-    throw new Error('[bundler] rollup produced no entry chunk');
+  const entryChunk = output.find(
+    (item): item is OutputChunk =>
+      item.type === 'chunk' && item.isEntry && item.facadeModuleId === VIRTUAL_ENTRY_ID,
+  );
+  if (!entryChunk) {
+    throw new Error('[bundler] rolldown produced no entry chunk');
   }
 
   return {

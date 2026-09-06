@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bundleCss, bundleScripts, clearBundledFiles, getBundledFile } from '../src/core/bundler';
 
@@ -19,6 +20,35 @@ describe('bundler', () => {
     await fs.mkdir(path.dirname(absolute), { recursive: true });
     await fs.writeFile(absolute, content, 'utf-8');
     return `/${relativePath.replace(/\\/g, '/')}`;
+  };
+
+  const executeBundle = async (entryFilename: string) => {
+    const executionDir = path.join(tmpRoot, 'execution');
+    await fs.mkdir(executionDir, { recursive: true });
+
+    const pending = [entryFilename];
+    const written = new Set<string>();
+    while (pending.length > 0) {
+      const filename = pending.pop()!;
+      if (written.has(filename)) {
+        continue;
+      }
+      const bundled = getBundledFile(filename);
+      if (!bundled) {
+        throw new Error(`Missing generated chunk: ${filename}`);
+      }
+      written.add(filename);
+      await fs.writeFile(path.join(executionDir, filename), bundled.content, 'utf-8');
+
+      for (const match of bundled.content.matchAll(
+        /(?:from\s*|import\s*(?:\(\s*)?)["']\.\/(bundle-[^"']+\.js)/g,
+      )) {
+        pending.push(match[1]);
+      }
+    }
+
+    await import(`${pathToFileURL(path.join(executionDir, entryFilename)).href}?run=${Date.now()}`);
+    return written;
   };
 
   beforeEach(async () => {
@@ -82,13 +112,13 @@ describe('bundler', () => {
       expect(duplicated.filename).toBe(forward.filename);
     }, 30_000);
 
-    it('reuses the finished bundle instead of running rollup again', async () => {
+    it('reuses the finished bundle instead of running Rolldown again', async () => {
       const alpha = await writeAsset('assets/alpha.js', `globalThis.__alpha = 'alpha-marker';`);
 
       const first = await bundleScripts([alpha], distClientDir);
       expect(first.filename).toBeTruthy();
 
-      // Xoá source: nếu lần gọi sau chạy lại rollup nó sẽ fail, nên kết quả
+      // Xoá source: nếu lần gọi sau chạy lại Rolldown nó sẽ fail, nên kết quả
       // giống hệt chứng minh cache đã phục vụ request thứ hai.
       await fs.rm(path.join(distClientDir, 'assets', 'alpha.js'));
 
@@ -118,6 +148,124 @@ describe('bundler', () => {
         content: '',
       });
     });
+
+    it('keeps vendor, chunk, and global imports as absolute web paths', async () => {
+      const vendor = await writeAsset(
+        'assets/vendor-react.js',
+        `globalThis.__bundledVendor = 'vendor-body';`,
+      );
+      const chunk = await writeAsset(
+        'assets/chunk-shared.js',
+        `globalThis.__bundledChunk = 'chunk-body';`,
+      );
+      const global = await writeAsset(
+        'assets/store.global.js',
+        `globalThis.__bundledGlobal = 'global-body';`,
+      );
+      const absoluteChunk = path.join(distClientDir, chunk.substring(1));
+      const entry = await writeAsset(
+        'assets/entry.js',
+        [
+          `import './vendor-react.js';`,
+          `import ${JSON.stringify(absoluteChunk)};`,
+          `import './store.global.js';`,
+        ].join('\n'),
+      );
+
+      const result = await bundleScripts([entry], distClientDir);
+
+      expect(result.content).toContain(`import "/assets/vendor-react.js";`);
+      expect(result.content).toContain(`import "/assets/chunk-shared.js";`);
+      expect(result.content).toContain(`import "/assets/store.global.js";`);
+      expect(result.content).not.toContain('vendor-body');
+      expect(result.content).not.toContain('chunk-body');
+      expect(result.content).not.toContain('global-body');
+      expect(vendor).toBe('/assets/vendor-react.js');
+      expect(global).toBe('/assets/store.global.js');
+    }, 30_000);
+
+    it('preserves sorted input side effects and executes a shared module once', async () => {
+      const shared = await writeAsset(
+        'assets/shared.js',
+        `globalThis.__bundleSharedRuns = (globalThis.__bundleSharedRuns || 0) + 1;`,
+      );
+      const zeta = await writeAsset(
+        'assets/zeta.js',
+        `import './shared.js'; globalThis.__bundleOrder.push('zeta');`,
+      );
+      const alpha = await writeAsset(
+        'assets/alpha.js',
+        `import './shared.js'; globalThis.__bundleOrder.push('alpha');`,
+      );
+      globalThis.__bundleOrder = [];
+      globalThis.__bundleSharedRuns = 0;
+
+      const result = await bundleScripts([zeta, alpha], distClientDir);
+      await executeBundle(result.filename);
+
+      expect(globalThis.__bundleOrder).toEqual(['alpha', 'zeta']);
+      expect(globalThis.__bundleSharedRuns).toBe(1);
+      expect(shared).toBe('/assets/shared.js');
+      delete globalThis.__bundleOrder;
+      delete globalThis.__bundleSharedRuns;
+    }, 30_000);
+
+    it('keeps runtime script side effects when the consumer package disables them', async () => {
+      await fs.writeFile(
+        path.join(tmpRoot, 'package.json'),
+        JSON.stringify({ type: 'module', sideEffects: false }),
+        'utf-8',
+      );
+      const entry = await writeAsset(
+        'assets/runtime.js',
+        `globalThis.__bundleRuntimeRan = true;`,
+      );
+      globalThis.__bundleRuntimeRan = false;
+
+      const result = await bundleScripts([entry], distClientDir);
+      await executeBundle(result.filename);
+
+      expect(result.content).toContain('__bundleRuntimeRan');
+      expect(globalThis.__bundleRuntimeRan).toBe(true);
+      delete globalThis.__bundleRuntimeRan;
+    }, 30_000);
+
+    it('keeps bare module specifiers external', async () => {
+      const entry = await writeAsset(
+        'assets/external.js',
+        `import value from 'l5e-external-test'; globalThis.__external = value;`,
+      );
+
+      const result = await bundleScripts([entry], distClientDir);
+
+      expect(result.content).toContain(`from "l5e-external-test"`);
+    }, 30_000);
+
+    it('stores and executes lazy chunks while returning the real entry', async () => {
+      await writeAsset(
+        'assets/lazy.js',
+        `globalThis.__bundleLazyRuns = (globalThis.__bundleLazyRuns || 0) + 1; export const value = 'lazy-value';`,
+      );
+      const entry = await writeAsset(
+        'assets/main.js',
+        `globalThis.__bundleEntryRan = true; globalThis.__loadBundleLazy = () => import('./lazy.js').then((mod) => mod.value);`,
+      );
+      globalThis.__bundleLazyRuns = 0;
+      globalThis.__bundleEntryRan = false;
+
+      const result = await bundleScripts([entry], distClientDir);
+      const written = await executeBundle(result.filename);
+
+      expect(result.content).toContain('__bundleEntryRan');
+      expect(globalThis.__bundleEntryRan).toBe(true);
+      expect(globalThis.__bundleLazyRuns).toBe(0);
+      expect([...written]).toHaveLength(2);
+      await expect(globalThis.__loadBundleLazy()).resolves.toBe('lazy-value');
+      expect(globalThis.__bundleLazyRuns).toBe(1);
+      delete globalThis.__bundleLazyRuns;
+      delete globalThis.__bundleEntryRan;
+      delete globalThis.__loadBundleLazy;
+    }, 30_000);
   });
 
   describe('getBundledFile', () => {
