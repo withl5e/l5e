@@ -8,7 +8,7 @@ order: 28
 # Migrating an L5E app to Vite 8
 
 This guide is for an existing L5E app that uses the Vite 7 based release. It applies to
-the forthcoming Vite 8 L5E alpha, `@withl5e/l5e@1.0.0-alpha.0`; use these install commands
+the forthcoming Vite 8 L5E release, `@withl5e/l5e@1.0.0`; use these install commands
 once that release is published. Upgrade the framework package and Vite together, then
 run the checks below before deploying.
 
@@ -23,14 +23,14 @@ node --version
 
 pnpm 11 itself requires Node.js 22.13 or newer. Projects that stay on Node.js 20.19
 can use a supported pnpm 10 release; the `allowBuilds` setting described below is
-available from pnpm 10.26. The L5E 1.0 alpha release checks use pnpm 11, so pnpm 10.26 is a
+available from pnpm 10.26. The L5E 1.0 release checks use pnpm 11, so pnpm 10.26 is a
 compatible configuration path rather than part of the tested release matrix.
 
 Keep the same package manager and lockfile that the project already uses. With pnpm,
 for example, update the framework package and Vite with:
 
 ```bash
-pnpm up @withl5e/l5e@1.0.0-alpha.0 vite@^8
+pnpm up @withl5e/l5e@1.0.0 vite@^8
 
 # React apps that still use @vitejs/plugin-react 4:
 pnpm up --save-dev @vitejs/plugin-react@^6
@@ -40,11 +40,11 @@ For npm, use explicit major versions so an existing Vite 7 range does not preven
 upgrade:
 
 ```bash
-npm install @withl5e/l5e@1.0.0-alpha.0
+npm install @withl5e/l5e@1.0.0
 npm install -D vite@^8
 ```
 
-For Yarn, use `yarn add @withl5e/l5e@1.0.0-alpha.0` and `yarn add --dev vite@^8`. If a tool in
+For Yarn, use `yarn add @withl5e/l5e@1.0.0` and `yarn add --dev vite@^8`. If a tool in
 your dependency graph pins its own Vite peer, update that tool to a Vite 8 compatible
 release before resolving peers.
 
@@ -100,7 +100,7 @@ plugin; update that plugin and follow its Vite 8 migration instructions instead.
 
 ## Check esbuild users and plugins
 
-Vite 8 uses Oxc and Rolldown internally. L5E 1.0 alpha also owns its direct `rolldown`
+Vite 8 uses Oxc and Rolldown internally. L5E 1.0 also owns its direct `rolldown`
 dependency for runtime bundling, so application packages should not add Rolldown
 themselves. L5E intentionally keeps `esbuild` for its own JSX transform path, which is
 separate from Vite's deprecated esbuild compatibility options. If another application
