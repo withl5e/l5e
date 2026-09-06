@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { DEV_BASE_URL } from '../playwright.config';
 
 // The /island page (examples/basic) renders two <ClientIsland from="./react/Counter">:
 //   - `.ssr-island`  : ssr={true}  → server-rendered into the placeholder + hydrated
@@ -50,5 +51,28 @@ test.describe('ssr islands in production HTML', () => {
     await expect(page.locator('.csr-island .count')).toHaveText('Count: 0');
     await page.locator('.csr-island button').click();
     await expect(page.locator('.csr-island .count')).toHaveText('Count: 1');
+  });
+});
+
+test.describe('islands in development', () => {
+  test.use({ baseURL: DEV_BASE_URL });
+
+  test('hydrates without loading server-only render context code in the browser', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    await page.goto('/island');
+
+    const ssrCount = page.locator('.ssr-island .count');
+    await expect(ssrCount).toHaveText('Count: 5');
+    const csrCount = page.locator('.csr-island .count');
+    await expect(csrCount).toHaveText('Count: 0');
+    await page.locator('.ssr-island button').click();
+    await expect(ssrCount).toHaveText('Count: 6');
+
+    await page.locator('.csr-island button').click();
+    await expect(csrCount).toHaveText('Count: 1');
+
+    expect(pageErrors).toEqual([]);
   });
 });

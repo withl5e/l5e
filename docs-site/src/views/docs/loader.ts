@@ -35,9 +35,13 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-async function renderMarkdown(body: string): Promise<{ html: string; toc: TocItem[] }> {
+async function renderMarkdown(
+  body: string,
+  docs: DocEntry[],
+): Promise<{ html: string; toc: TocItem[] }> {
   const toc: TocItem[] = [];
   const usedIds = new Map<string, number>();
+  const docsBySlug = new Map(docs.map((doc) => [doc.slug, doc]));
 
   const md = new Marked({
     async: true,
@@ -69,9 +73,51 @@ async function renderMarkdown(body: string): Promise<{ html: string; toc: TocIte
       },
     } as any,
   });
+  md.use({
+    extensions: [
+      {
+        name: 'internalDocLink',
+        level: 'inline',
+        start(source) {
+          return source.indexOf('[[');
+        },
+        tokenizer(source) {
+          const match = /^\[\[(?:\d+-)?([a-z0-9][a-z0-9-]*)\]\]/.exec(source);
+          if (!match) return;
+
+          const doc = docsBySlug.get(match[1]);
+          if (!doc) return;
+
+          return {
+            type: 'internalDocLink',
+            raw: match[0],
+            href: doc.href,
+            title: doc.title,
+          };
+        },
+        renderer(token) {
+          return `<a href="${token.href}">${escapeHtml(token.title)}</a>`;
+        },
+      },
+    ],
+  });
 
   const html = await md.parse(body);
   return { html, toc };
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[character]!,
+  );
 }
 
 interface Frontmatter {
@@ -129,7 +175,7 @@ export const loader: LoaderFunction = async (requestInfo) => {
   const currentDoc = docs[currentIndex];
   const markdown = await fs.readFile(currentDoc.filePath, 'utf-8');
   const { body } = parseFrontmatter(markdown);
-  const { html, toc } = await renderMarkdown(body);
+  const { html, toc } = await renderMarkdown(body, docs);
 
   return {
     props: {

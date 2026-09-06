@@ -47,7 +47,7 @@ describe('global stylesheet convention', () => {
     const handler = typeof hook === 'function' ? hook : hook.handler;
     const config = handler.call({}, { root, build: {} });
 
-    expect(config.build.rollupOptions.input['global-style']).toBe(join(root, 'src/global.css'));
+    expect(config.build.rolldownOptions.input['global-style']).toBe(join(root, 'src/global.css'));
   });
 
   it('uses the hashed manifest file in production', async () => {

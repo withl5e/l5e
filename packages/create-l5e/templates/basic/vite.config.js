@@ -7,14 +7,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig({
-  esbuild: {
+  oxc: {
     jsx: 'preserve',
   },
   plugins: [coreVite()],
   build: {
     outDir: 'dist/client',
     manifest: true,
-    rollupOptions: {
+    rolldownOptions: {
       external: (id) => id === 'fsevents',
     },
   },

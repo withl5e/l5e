@@ -214,9 +214,9 @@ function extractPathsFromFile(filePath: string, rootDir: string): { css: string[
 }
 
 /**
- * Auto-discover rollup input entries from useCss and useClientJs calls
+ * Auto-discover bundler input entries from useCss and useClientJs calls
  */
-function discoverRollupInput(rootDir: string): {
+function discoverBundlerInput(rootDir: string): {
   input: Record<string, string>;
   islandRegistry: Map<string, string>;
   pathToKey: Map<string, string>;
@@ -292,7 +292,7 @@ function discoverRollupInput(rootDir: string): {
       }
     }
 
-    // Convert paths to rollup input entries
+    // Convert paths to bundler input entries
     // CSS files
     for (const cssPath of allCssPaths) {
       // Remove leading /src/ and convert to relative path
@@ -305,7 +305,7 @@ function discoverRollupInput(rootDir: string): {
       const absolutePath = resolve(rootDir, relativePath);
 
       // src/global.css is already a dedicated convention entry. Keeping one
-      // Rollup input avoids collisions if a shared layout also calls useCss().
+      // Separate input entries avoid collisions if a shared layout also calls useCss().
       if (globalStyleInput && resolve(absolutePath) === resolve(globalStyleInput)) {
         continue;
       }
@@ -352,7 +352,7 @@ function discoverRollupInput(rootDir: string): {
       input[entryName] = absolutePath;
     }
 
-    // Add island component files to rollup input so they appear in manifest.
+    // Add island component files to the bundler input so they appear in the manifest.
     // server.ts looks up manifest at runtime to resolve per-page island URLs.
     for (const [key, src] of keyToSrc) {
       const absolutePath = resolve(rootDir, src);
@@ -367,7 +367,7 @@ function discoverRollupInput(rootDir: string): {
     }
   } catch (error) {
     // Silently fail if directory doesn't exist or other errors
-    console.warn('[l5e] Failed to discover rollup input:', error);
+    console.warn('[l5e] Failed to discover bundler input:', error);
   }
 
   return { input, islandRegistry, pathToKey, keyToSrc, actionRegistry };
@@ -457,7 +457,7 @@ export function coreVite(): Plugin {
 
       // Re-scan action registry when an actions file changes
       if (/actions\.(ts|tsx)$/.test(file)) {
-        const discovered = discoverRollupInput(rootDir);
+        const discovered = discoverBundlerInput(rootDir);
         actionRegistry = discovered.actionRegistry;
         // Invalidate the virtual:l5e-actions module so server picks up new registry
         const mod = server.moduleGraph.getModuleById('\0' + VIRTUAL_L5E_ACTIONS);
@@ -519,9 +519,9 @@ export function coreVite(): Plugin {
     },
 
     config(userConfig) {
-      // Auto-discover rollup input from useCss and useClientJs
+      // Auto-discover bundler input from useCss and useClientJs
       const projectRoot = userConfig.root || process.cwd();
-      const discovered = discoverRollupInput(projectRoot);
+      const discovered = discoverBundlerInput(projectRoot);
 
       // Store island registries for use in other hooks
       islandRegistry = discovered.islandRegistry;
@@ -529,8 +529,8 @@ export function coreVite(): Plugin {
       keyToSrc = discovered.keyToSrc;
       actionRegistry = discovered.actionRegistry;
 
-      // Merge with existing rollupOptions.input if any
-      const existingInput = userConfig.build?.rollupOptions?.input || {};
+      // Merge with existing rolldownOptions.input if any
+      const existingInput = userConfig.build?.rolldownOptions?.input || {};
       const mergedInput =
         typeof existingInput === 'object' && !Array.isArray(existingInput)
           ? { ...discovered.input, ...existingInput }
@@ -538,12 +538,11 @@ export function coreVite(): Plugin {
 
       return {
         build: {
-          ...userConfig.build,
-          rollupOptions: {
-            ...userConfig.build?.rollupOptions,
+          rolldownOptions: {
+            ...userConfig.build?.rolldownOptions,
             input: Object.keys(mergedInput).length > 0 ? mergedInput : undefined,
             // Preserve exports for island component entries â€” without this,
-            // Rollup tree-shakes their exports since nothing in the bundle imports them
+            // The bundler tree-shakes their exports since nothing imports them
             // (they're loaded at runtime via dynamic import from the island runtime).
             preserveEntrySignatures: 'exports-only',
           },
