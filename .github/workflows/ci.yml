@@ -23,5 +23,3 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - run: pnpm typecheck
-      - run: pnpm --filter @withl5e/e2e-tests exec playwright install --with-deps chromium
-      - run: pnpm --filter @withl5e/e2e-tests test:shared-modules

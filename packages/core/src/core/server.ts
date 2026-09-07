@@ -9,9 +9,7 @@ import type { ViteDevServer } from 'vite';
 import { createContext, type MiddlewareHandler, type RewritePayload } from '../middleware';
 import { bundleCss, bundleScripts, getBundledFile } from './bundler';
 import type { RenderResult, RequestInfo } from './entry-server';
-import { resolveGlobalStyleHref, withAssetBase } from './global-style';
-import { createScriptBundlePolicy, type ScriptBundlePolicy } from './script-bundle-policy';
-import type { Manifest } from 'vite';
+import { resolveGlobalStyleHref } from './global-style';
 import { escapeProp } from './render';
 import { createHeadersFromExpressRequest, parseCookies } from './request';
 
@@ -217,7 +215,6 @@ async function createPageResponse({
   distClientDir,
   isProduction,
   assetBase,
-  scriptPolicy,
 }: {
   rendered: RenderResult;
   template: string;
@@ -226,7 +223,6 @@ async function createPageResponse({
   distClientDir: string;
   isProduction: boolean;
   assetBase: string;
-  scriptPolicy?: ScriptBundlePolicy;
 }): Promise<globalThis.Response> {
   const rawResponse = createRawResponse(rendered);
   if (rawResponse) {
@@ -281,9 +277,7 @@ async function createPageResponse({
   }
 
   if (isProduction && manifest) {
-    scriptSrcList = scriptSrcList.filter(
-      (src) => src.replace(/^\//, '') !== 'src/client.global.ts',
-    );
+    scriptSrcList = scriptSrcList.filter((src) => !src.includes('.global.'));
     cssSrcList = cssSrcList.filter((src) => !src.includes('.global.'));
 
     const cssFiles = new Set<string>();
@@ -332,16 +326,14 @@ async function createPageResponse({
     }
 
     if (mappedScripts.length > 0) {
-      const bundledScript = await bundleScripts(mappedScripts, distClientDir, scriptPolicy);
-      scriptSrcList = bundledScript.filename
-        ? [withAssetBase(assetBase, bundledScript.filename)]
-        : mappedScripts.map((file) => withAssetBase(assetBase, file));
+      const bundledScript = await bundleScripts(mappedScripts, distClientDir);
+      scriptSrcList = bundledScript.filename ? [`/${bundledScript.filename}`] : mappedScripts;
     }
 
     if (mappedCssFiles.length > 0) {
       const bundledCss = await bundleCss(mappedCssFiles, distClientDir);
       if (bundledCss.filename) {
-        cssSrcList = [withAssetBase(assetBase, bundledCss.filename)];
+        cssSrcList = [`/${bundledCss.filename}`];
       }
     }
 
@@ -349,11 +341,11 @@ async function createPageResponse({
     if (globalEntry) {
       if (globalEntry.css && globalEntry.css.length > 0) {
         globalEntry.css.forEach((cssFile: string) => {
-          appendStylesheet(withAssetBase(assetBase, cssFile), true);
+          appendStylesheet(`/${cssFile}`, true);
         });
       }
       if (globalEntry.file) {
-        globalScripts.push(withAssetBase(assetBase, globalEntry.file));
+        globalScripts.push(`/${globalEntry.file}`);
       }
     }
 
@@ -362,7 +354,7 @@ async function createPageResponse({
       for (const island of islandEntries) {
         const entry = manifest[island.src];
         if (entry?.file) {
-          islandMap[island.key] = withAssetBase(assetBase, entry.file);
+          islandMap[island.key] = `/${entry.file}`;
         }
       }
       if (Object.keys(islandMap).length > 0) {
@@ -414,9 +406,9 @@ async function createPageResponse({
   const html = rendered.rawHtml
     ? rendered.html || ''
     : templateWithLang
-        .replace(`<!--app-head-->`, () => (rendered.head ?? '') + extraHead)
-        .replace(`<!--app-html-->`, () => rendered.html ?? '')
-        .replace(`<!--app-scripts-->`, () => scriptsHtml);
+      .replace(`<!--app-head-->`, () => (rendered.head ?? '') + extraHead)
+      .replace(`<!--app-html-->`, () => rendered.html ?? '')
+      .replace(`<!--app-scripts-->`, () => scriptsHtml);
 
   const headers = new Headers({
     'Content-Type': 'text/html',
@@ -443,6 +435,7 @@ async function createPageResponse({
     cacheControlParts.push('must-revalidate');
 
     cdnCacheControlParts.push('public');
+
 
     headers.set('Cache-Control', cacheControlParts.join(', '));
     headers.set('CDN-Cache-Control', cdnCacheControlParts.join(', '));
@@ -489,19 +482,6 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
   // Add Vite or respective production middlewares
   let vite: ViteDevServer | undefined;
   const distClientDir = path.join(root, './dist/client');
-  // A production server owns one immutable build. Share its manifest/policy
-  // across requests, just like its cached HTML template and SSR module.
-  const productionManifest: Manifest | undefined = isProduction
-    ? JSON.parse(await fs.readFile(path.join(distClientDir, '.vite/manifest.json'), 'utf-8'))
-    : undefined;
-  let scriptPolicy: ScriptBundlePolicy | undefined;
-  if (productionManifest) {
-    try {
-      scriptPolicy = createScriptBundlePolicy(productionManifest, distClientDir, base);
-    } catch (error) {
-      console.warn('[bundler] Invalid build manifest; serving original script entries.', error);
-    }
-  }
 
   if (!isProduction) {
     const { createServer } = await import('vite');
@@ -536,7 +516,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
     // Route Ä‘á»ƒ serve bundled files tá»« memory map
     // Äáº·t route nÃ y trÆ°á»›c route HTML Ä‘á»ƒ catch request trÆ°á»›c
     app.get(
-      withAssetBase(base, 'bundle-:hash.:ext'),
+      `${base === '/' ? '' : base}/bundle-:hash.:ext`,
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
           const { hash, ext } = req.params;
@@ -690,19 +670,13 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
 
       const loadedMiddleware = await entryServerModule.loadMiddleware?.();
       const middlewareHandler: MiddlewareHandler =
-        typeof loadedMiddleware === 'function'
-          ? loadedMiddleware
-          : (_ctx, dummyNext) => dummyNext();
+        typeof loadedMiddleware === 'function' ? loadedMiddleware : (_ctx, dummyNext) => dummyNext();
 
       // If middleware short-circuits (returns its own Response — a redirect, a
       // 403, ...) instead of calling `next`, this callback never runs and that
       // response wins, same as it would for a page request.
       const response = await middlewareHandler(middlewareContext, async (payload) => {
-        const nextRequest = createRewriteRequest(
-          payload,
-          middlewareContext.request,
-          middlewareContext.url,
-        );
+        const nextRequest = createRewriteRequest(payload, middlewareContext.request, middlewareContext.url);
         const requestInfo = {
           ...createRequestInfo(req, nextRequest, base, locals),
           path: req.originalUrl,
@@ -769,7 +743,12 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
         )) as EntryServerModule;
         render = entryServer.render;
         loadMiddleware = entryServer.loadMiddleware;
-        manifest = productionManifest;
+        // Read manifest to map hashed assets
+        const manifestJson = await fs.readFile(
+          path.join(root, './dist/client/.vite/manifest.json'),
+          'utf-8',
+        );
+        manifest = JSON.parse(manifestJson);
       }
 
       const loadedMiddleware = await loadMiddleware?.();
@@ -799,7 +778,6 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
           distClientDir,
           isProduction,
           assetBase: isProduction ? base : vite!.config.base,
-          scriptPolicy,
         });
       };
 
