@@ -23,7 +23,8 @@ export default defineConfig({
 
 See the root README and `examples/basic` for a full app.
 
-Compact chunking is experimental and opt-in:
+Compact chunking is experimental and opt-in. The staged activation behavior and
+`islandRuntime` option below require the `1.1.0-alpha.2` prerelease:
 
 ```ts
 coreVite({
@@ -51,3 +52,7 @@ promoted. Compact mode requires native import-map support.
 The alpha renderer bridge expects Vite to emit one entry facade and one canonical
 renderer export chunk. A different renderer shape is rejected during server setup
 because merging multiple minified export namespaces can make aliases ambiguous.
+
+See [runtime script bundles and shared modules](../../docs/runtime-script-bundling.md)
+for the download/evaluation/mount lifecycle, strategy behavior, ownership rules,
+activation examples and current alpha limitations.
