@@ -57,6 +57,11 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
     if (rule.maxSize !== undefined && (!Number.isFinite(rule.maxSize) || rule.maxSize <= 0)) {
       throw new Error(`[l5e chunking] Invalid maxSize for ${rule.name}`);
     }
+    if (options.mode === 'compact' && rule.maxSize !== undefined) {
+      throw new Error(
+        `[l5e chunking] Compact mode cannot use maxSize for ${rule.name}; it would split the canonical shared file.`,
+      );
+    }
     names.add(rule.name);
   }
   let root = '';

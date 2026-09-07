@@ -23,6 +23,14 @@ describe('client chunk configuration', () => {
     expect(() =>
       coreVite({ chunking: { shared: [{ name: 'state', packages: ['some-store'], maxSize: 0 }] } }),
     ).toThrow('maxSize');
+    expect(() =>
+      coreVite({
+        chunking: {
+          mode: 'compact',
+          shared: [{ name: 'state', packages: ['some-store'], maxSize: 100_000 }],
+        },
+      }),
+    ).toThrow('cannot use maxSize');
   });
 
   it('requires an explicit choice between framework and raw bundler grouping', () => {
