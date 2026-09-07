@@ -12,6 +12,7 @@ export function createScriptBundlePolicy(manifest: Manifest, distClientDir: stri
   const assetDirectory = realpathSync(directory);
   const files = new Set<string>();
   const preserved = new Set<string>();
+  const staticImports = new Map<string, string[]>();
   const jsEntries = Object.entries(manifest).filter(([, entry]) => /\.[cm]?js$/.test(entry.file));
 
   function absoluteFile(file: string) {
@@ -50,6 +51,10 @@ export function createScriptBundlePolicy(manifest: Manifest, distClientDir: stri
       }
       preserved.add(absoluteFile(dependency.file));
     }
+    staticImports.set(
+      absoluteFile(entry.file),
+      (entry.imports || []).map((key) => absoluteFile(manifest[key].file)),
+    );
   }
 
   const cacheKey = createHash('sha256')
@@ -66,6 +71,24 @@ export function createScriptBundlePolicy(manifest: Manifest, distClientDir: stri
     },
     isPreserved(file: string) {
       return preserved.has(file);
+    },
+    inlineableRoots(roots: string[]) {
+      // External ESM imports execute before any inlined body. Isolate prefix
+      // roots in runtime chunks when a later root introduces a dependency effect;
+      // only the suffix after the last such boundary can share the entry chunk.
+      const visited = new Set<string>();
+      let suffixStart = 0;
+      function visit(file: string, rootIndex: number) {
+        if (visited.has(file)) return;
+        visited.add(file);
+        for (const dependency of staticImports.get(file) || []) visit(dependency, rootIndex);
+        if (preserved.has(file)) suffixStart = rootIndex;
+      }
+      roots.forEach((file, index) => {
+        visit(file, index);
+        if (preserved.has(file)) suffixStart = index + 1;
+      });
+      return new Set(roots.slice(suffixStart).filter((file) => !preserved.has(file)));
     },
     assetUrl(file: string) {
       if (!files.has(file)) throw new Error(`[bundler] Import is missing from manifest: ${file}`);

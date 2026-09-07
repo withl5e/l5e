@@ -124,12 +124,14 @@ async function runScriptBundle(
   uniquePaths: string[],
   policy: ScriptBundlePolicy,
 ): Promise<BundleResult> {
-  const entryContent = uniquePaths
-    .map((p) => {
-      const filePath = policy.fileForScript(p);
-      return `import ${JSON.stringify(filePath)};`;
-    })
-    .join('\n');
+  const roots = uniquePaths.map((p) => policy.fileForScript(p));
+  const suffix = policy.inlineableRoots(roots);
+  const prefixChunks = new Map(
+    roots.flatMap((file, index) =>
+      !policy.isPreserved(file) && !suffix.has(file) ? [[file, `entry-${index}`] as const] : [],
+    ),
+  );
+  const entryContent = roots.map((filePath) => `import ${JSON.stringify(filePath)};`).join('\n');
 
   const rolldownOptions: InputOptions = {
     input: VIRTUAL_ENTRY_ID,
@@ -154,10 +156,10 @@ async function runScriptBundle(
 
   const outputOptions: OutputOptions = {
     format: 'es',
-    codeSplitting: true,
+    codeSplitting: { groups: [{ name: (id) => prefixChunks.get(id) ?? null }] },
     minify: false,
     entryFileNames: 'bundle-[hash].js',
-    chunkFileNames: 'bundle-[hash].js',
+    chunkFileNames: `bundle-${generateHash(JSON.stringify(roots))}-[hash].js`,
   };
 
   const { rolldown } = await loadRolldown();

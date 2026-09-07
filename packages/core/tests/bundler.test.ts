@@ -84,6 +84,66 @@ describe('bundler', () => {
   });
 
   describe('bundleScripts', () => {
+    it('keeps private roots in runtime output across different page combinations', async () => {
+      const alpha = await writeAsset(
+        'assets/alpha.js',
+        `globalThis.__privateRuns = (globalThis.__privateRuns || 0) + 1;`,
+      );
+      await writeAsset('assets/state.js', `export const state = {};`);
+      const beta = await writeAsset(
+        'assets/beta.js',
+        `import { state } from './state.js'; globalThis.__betaState = state;`,
+      );
+      const gamma = await writeAsset('assets/gamma.js', `globalThis.__gammaRan = true;`);
+      const delta = await writeAsset(
+        'assets/delta.js',
+        `import { state } from './state.js'; globalThis.__deltaState = state;`,
+      );
+      manifest['assets/beta.js'].imports = ['assets/state.js'];
+      manifest['assets/delta.js'].imports = ['assets/state.js'];
+      for (const other of [beta, gamma, delta]) {
+        const result = await bundleScripts([alpha, other], distClientDir);
+        expect(result.content).not.toMatch(/["']\/assets\/alpha\.js["']/);
+        await executeBundle(result.filename);
+      }
+      expect(globalThis.__privateRuns).toBe(3);
+      expect(globalThis.__betaState).toBe(globalThis.__deltaState);
+      delete globalThis.__privateRuns;
+      delete globalThis.__betaState;
+      delete globalThis.__deltaState;
+      delete globalThis.__gammaRan;
+    });
+
+    it('runs an earlier entry before a later entry dependency reads its side effects', async () => {
+      const alpha = await writeAsset('assets/alpha.js', `globalThis.__entryFlag = 1;`);
+      await writeAsset('assets/state.js', `export const captured = globalThis.__entryFlag;`);
+      const beta = await writeAsset(
+        'assets/beta.js',
+        `import { captured } from './state.js'; globalThis.__capturedFlag = captured;`,
+      );
+      manifest['assets/beta.js'].imports = ['assets/state.js'];
+      const result = await bundleScripts([alpha, beta], distClientDir);
+      await executeBundle(result.filename);
+      expect(globalThis.__capturedFlag).toBe(1);
+      expect(result.content).toContain('__capturedFlag');
+      delete globalThis.__entryFlag;
+      delete globalThis.__capturedFlag;
+    });
+
+    it('runs an earlier entry before a later preserved entry', async () => {
+      const alpha = await writeAsset('assets/alpha.js', `globalThis.__entryFlag = 2;`);
+      const beta = await writeAsset(
+        'assets/beta.js',
+        `globalThis.__capturedFlag = globalThis.__entryFlag;`,
+      );
+      manifest['assets/beta.js'].isDynamicEntry = true;
+      const result = await bundleScripts([alpha, beta], distClientDir);
+      await executeBundle(result.filename);
+      expect(globalThis.__capturedFlag).toBe(2);
+      delete globalThis.__entryFlag;
+      delete globalThis.__capturedFlag;
+    });
+
     it('preserves canonical imports when the client output is a symlink', async () => {
       await writeAsset('assets/session.js', `export const store = {};`);
       const entry = await writeAsset(

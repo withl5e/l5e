@@ -11,6 +11,16 @@ original asset URLs. The index covers the entire build, including static and
 dynamic imports, global bootstrap and React island entries. An entry imported
 by another module also retains its original URL, even if selected on the page.
 
+Within a runtime bundle, roots retain L5E's existing sorted asset-path order.
+Static external imports execute before inlined code. When a later root introduces
+a dependency or preserved entry that has not executed yet in that graph traversal,
+L5E isolates earlier private roots in runtime-generated chunks and combines the
+remaining safe suffix in the runtime entry. These chunks are scoped to the page's
+script combination; private roots never switch to canonical application URLs.
+This may require additional requests to preserve execution order. It prevents a
+later dependency from reading global state before an earlier entry initializes
+it. Dynamic imports do not create this barrier.
+
 This keeps one instance of an emitted shared module within a browser document.
 It works for stores, registries, caches, event buses and library runtime state.
 It does not merge distinct packages/module identities already present in the

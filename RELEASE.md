@@ -12,13 +12,18 @@ publish or stable deploy happens if `pnpm build / test / typecheck` fails.
 
 The actual workflow lives at [`.github/workflows/release.yml`](./.github/workflows/release.yml).
 
-## 1.0.1-rc.0 runtime bundling
+## 1.0.1 runtime bundling
 
 Runtime JavaScript bundles now preserve dependency chunks from the application's
 build manifest instead of recognizing vendor/global filenames. Developer-defined
 chunk names and grouping remain intact, and shared stores no longer require a
 `.global.ts` suffix or an import from global bootstrap. Page entry code is still
 combined at request time. See [the runtime bundling contract](docs/runtime-script-bundling.md).
+
+Stable also preserves cross-entry dependency side-effect order. Earlier private
+entries use runtime-generated chunks when necessary, while a safe suffix remains
+combined. These runtime chunks are scoped to the script combination, keeping
+private entry code separate from canonical application dependencies.
 
 Production manifests are cached per server build; restart the server when replacing
 its output. Missing dependency metadata falls back to original entry URLs. The

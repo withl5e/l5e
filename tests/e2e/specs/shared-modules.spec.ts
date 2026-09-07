@@ -62,7 +62,7 @@ async function fixture(scenario: Scenario) {
   );
   await write(
     'src/direct.ts',
-    `export { store } from './session'; window.directRuns = (window.directRuns || 0) + 1;`,
+    `export { store } from './session'; window.directRuns = (window.directRuns || 0) + 1; window.commonRunsAtDirect = window.commonRuns;`,
   );
   await write(
     'src/page-a.ts',
@@ -184,6 +184,7 @@ for (const scenario of [
     try {
       await page.goto(site.baseURL);
       await page.waitForFunction(() => !!window.pageAStore);
+      expect(await page.evaluate(() => window.commonRunsAtDirect)).toBe(1);
       expect(await page.evaluate(() => window.commonStore === window.pageAStore)).toBe(true);
       if (scenario.globalStore)
         expect(await page.evaluate(() => window.globalStore === window.pageAStore)).toBe(true);
@@ -202,7 +203,7 @@ for (const scenario of [
       const bundle = html.match(/src="([^" ]*bundle-[^" ]+\.js)"/)?.[1];
       expect(bundle).toBeTruthy();
       const bundleCode = await (await request.get(site.origin + bundle)).text();
-      expect(bundleCode).toContain('commonRuns');
+      expect(bundleCode).not.toContain('commonRuns');
       expect(bundleCode).toContain('pageBStore');
       expect(bundleCode).not.toContain('storeInitializations');
       expect(bundleCode).not.toContain('directRuns');
