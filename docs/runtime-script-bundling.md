@@ -36,6 +36,37 @@ behavior. Combining dependencies into a large vendor chunk can make more code
 load eagerly; that is a consequence of the application's build configuration.
 L5E does not split that chunk again at request time.
 
+## Compact mode
+
+`chunking: { mode: 'compact' }` opts a production app into at most three JavaScript
+URLs per rendered page: one global bootstrap, one page bundle (including its React
+islands and renderer), and, when configured, one canonical shared bundle. Dynamic
+JavaScript is folded into its owner bundle, but its initializer still runs only when
+the original dynamic import is invoked. CSS dependencies keep their loading behavior.
+
+Compact mode accepts one `shared` group. List the store, cache, registry, or other
+module roots whose identity must survive imports from different page bundles. Their
+minimum static dependency closure joins the canonical shared bundle. For example:
+
+```ts
+coreVite({
+  chunking: {
+    mode: 'compact',
+    shared: [{ name: 'state', modules: ['~/stores/session.ts'], packages: ['nanostores'] }],
+  },
+});
+```
+
+This is an explicit lifetime contract. L5E does not infer mutability from source text
+or package names. A module used only by separate page bundles remains private to each
+bundle unless its state root is configured. Modules statically shared by global and
+page code are owned and exported by the global bundle so live bindings and one-time
+initialization are preserved. A dynamic-only global overlap is rejected because
+promoting it would change initialization timing.
+
+Compact mode is opt-in. The default mode retains the existing emitted-chunk behavior
+and identity guarantees.
+
 Only page entry code is recombined. Side effects local to a page entry can run
 again if that entry participates in another runtime bundle. Put state shared
 between independently loaded consumers in an imported module; do not rely on

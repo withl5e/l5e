@@ -5,7 +5,22 @@ import type { Manifest } from 'vite';
 import { withAssetBase } from './global-style';
 
 /** Preserve the emitted module boundaries chosen by the application's build. */
-export function createScriptBundlePolicy(manifest: Manifest, distClientDir: string, base = '/') {
+export interface ChunkingReport {
+  mode?: string;
+  chunks?: Array<{
+    file: string;
+    kind: string;
+    canonicalShared?: boolean;
+    canonicalGlobal?: boolean;
+  }>;
+}
+
+export function createScriptBundlePolicy(
+  manifest: Manifest,
+  distClientDir: string,
+  base = '/',
+  report?: ChunkingReport,
+) {
   const directory = path.resolve(distClientDir);
   // Rolldown resolves entry importers through symlinks/junctions. Use the same
   // physical directory for identity while retaining the caller's output scope.
@@ -28,6 +43,17 @@ export function createScriptBundlePolicy(manifest: Manifest, distClientDir: stri
     }
     return absolute;
   }
+
+  const shared = new Set(
+    (report?.chunks || [])
+      .filter((chunk) => report?.mode === 'compact' && chunk.canonicalShared)
+      .map((chunk) => absoluteFile(chunk.file)),
+  );
+  const globalOwned = new Set(
+    (report?.chunks || [])
+      .filter((chunk) => report?.mode === 'compact' && chunk.canonicalGlobal)
+      .map((chunk) => absoluteFile(chunk.file)),
+  );
 
   for (const [key, entry] of jsEntries) {
     const file = absoluteFile(entry.file);
@@ -63,14 +89,43 @@ export function createScriptBundlePolicy(manifest: Manifest, distClientDir: stri
 
   return {
     cacheKey,
+    compact: report?.mode === 'compact',
     directory,
     fileForScript(script: string) {
-      const file = absoluteFile(script.replace(/^\/+/, ''));
+      const normalizedBase = base === '/' ? '/' : `/${base.replace(/^\/+|\/+$/g, '')}/`;
+      const relative = script.startsWith(normalizedBase)
+        ? script.slice(normalizedBase.length)
+        : script.replace(/^\/+/, '');
+      const file = absoluteFile(relative);
       if (!files.has(file)) throw new Error(`[bundler] Script is missing from manifest: ${script}`);
       return file;
     },
+    fileForAssetUrl(url: string) {
+      const normalizedBase = base === '/' ? '/' : `/${base.replace(/^\/+|\/+$/g, '')}/`;
+      const relative = url.startsWith(normalizedBase)
+        ? url.slice(normalizedBase.length)
+        : url.replace(/^\/+/, '');
+      const file = absoluteFile(relative);
+      return files.has(file) ? file : undefined;
+    },
     isPreserved(file: string) {
       return preserved.has(file);
+    },
+    isShared(file: string) {
+      return shared.has(file);
+    },
+    isGlobalOwned(file: string) {
+      return globalOwned.has(file);
+    },
+    sharedScripts() {
+      return [...shared].map((file) =>
+        withAssetBase(base, path.relative(assetDirectory, file).replace(/\\/g, '/')),
+      );
+    },
+    globalOwnedScripts() {
+      return [...globalOwned].map((file) =>
+        withAssetBase(base, path.relative(assetDirectory, file).replace(/\\/g, '/')),
+      );
     },
     inlineableRoots(roots: string[]) {
       // External ESM imports execute before any inlined body. Isolate prefix

@@ -44,6 +44,7 @@ export default defineConfig({
         island: resolve(import.meta.dirname, 'src/island/index.ts'),
         'island/client': resolve(import.meta.dirname, 'src/island/client.ts'),
         'island/runtime': resolve(import.meta.dirname, 'src/island/runtime.ts'),
+        'island/compact-runtime': resolve(import.meta.dirname, 'src/island/compact-runtime.ts'),
         router: resolve(import.meta.dirname, 'src/router/index.ts'),
         i18n: resolve(import.meta.dirname, 'src/i18n/index.ts'),
       },

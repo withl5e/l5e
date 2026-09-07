@@ -14,6 +14,11 @@ export interface SharedChunkGroup {
 }
 
 export interface ChunkingOptions {
+  /**
+   * Opt in to at most one global, one page bundle and one canonical shared file.
+   * State that must retain identity across page bundles must be listed in `shared`.
+   */
+  mode?: 'compact';
   shared?: SharedChunkGroup[];
 }
 
@@ -38,6 +43,9 @@ type Decision = { group: string | null; rule?: string; consumers: string[]; reas
 /** One build-time plan drives placement and the diagnostic report. Runtime reads Vite's manifest. */
 export function createChunkPlanner(options: ChunkingOptions = {}) {
   const rules = options.shared || [];
+  if (options.mode === 'compact' && rules.length > 1) {
+    throw new Error('[l5e chunking] Compact mode accepts one canonical shared group.');
+  }
   const names = new Set<string>();
   for (const rule of rules) {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(rule.name) || names.has(rule.name)) {
@@ -48,6 +56,11 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
     }
     if (rule.maxSize !== undefined && (!Number.isFinite(rule.maxSize) || rule.maxSize <= 0)) {
       throw new Error(`[l5e chunking] Invalid maxSize for ${rule.name}`);
+    }
+    if (options.mode === 'compact' && rule.maxSize !== undefined) {
+      throw new Error(
+        `[l5e chunking] Compact mode cannot use maxSize for ${rule.name}; it would split the canonical shared file.`,
+      );
     }
     names.add(rule.name);
   }
@@ -83,6 +96,39 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
     analyze(modules: ModuleInfo[]) {
       decisions.clear();
       const graph = new Map(modules.map((mod) => [mod.id, mod]));
+      if (options.mode === 'compact') {
+        const reachability = new Map<string, Map<string, boolean>>();
+        for (const entry of modules.filter((mod) => mod.isEntry)) {
+          const visit = (id: string, lazy: boolean) => {
+            const owners = reachability.get(id) || new Map<string, boolean>();
+            const previous = owners.get(entry.id);
+            if (previous === false || previous === lazy) return;
+            owners.set(entry.id, lazy);
+            reachability.set(id, owners);
+            const module = graph.get(id);
+            if (!module) return;
+            module.importedIds.forEach((dependency) => visit(dependency, lazy));
+            module.dynamicallyImportedIds.forEach((dependency) => visit(dependency, true));
+          };
+          visit(entry.id, false);
+        }
+        const globalEntry = modules.find(
+          (mod) => mod.isEntry && normalize(mod.id).endsWith('/src/client.global.ts'),
+        );
+        if (globalEntry) {
+          for (const [id, owners] of reachability) {
+            if (
+              !/\.css(?:\?|$)/.test(normalize(id)) &&
+              owners.get(globalEntry.id) === true &&
+              [...owners.keys()].some((owner) => owner !== globalEntry.id)
+            ) {
+              throw new Error(
+                `[l5e chunking] Compact mode cannot bridge a dynamic-only global overlap: ${portable(id)}. Import it statically from global or place state behind an explicit shared root.`,
+              );
+            }
+          }
+        }
+      }
       const roots = modules.filter((mod) => mod.isEntry || mod.dynamicImporters.length > 0);
       const consumers = new Map<string, Set<string>>();
       for (const entry of roots) {
@@ -133,9 +179,17 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
             tier === 3
               ? `lazy-${digest(JSON.stringify(labels))}`
               : ['global', 'page', 'island'][tier];
-          group = `shared-${matches[0].name}-${activation}`;
+          group = options.mode === 'compact' ? 'shared' : `shared-${matches[0].name}-${activation}`;
           reason = `Configured group ${matches[0].name}; activation ${activation}.`;
-        } else if (!mod.isEntry && users.length > 1) {
+        } else if (
+          options.mode === 'compact' &&
+          !mod.isEntry &&
+          users.some((id) => rank(id) === 0) &&
+          users.some((id) => rank(id) > 0)
+        ) {
+          group = 'global-owner';
+          reason = 'Static global/page overlap is exported by the canonical global artifact.';
+        } else if (options.mode !== 'compact' && !mod.isEntry && users.length > 1) {
           group = `shared-auto-${digest(JSON.stringify(labels))}`;
           reason = 'Shared by the same static consumers; preserves dynamic import roots.';
         }
@@ -155,7 +209,7 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
             return decision?.rule === rule.name ? decision.group : null;
           },
           maxSize: rule.maxSize,
-          includeDependenciesRecursively: false,
+          includeDependenciesRecursively: options.mode === 'compact',
         })),
         {
           name: (id: string) => decisions.get(id)?.group || null,
@@ -165,7 +219,8 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
     },
     report(bundle: OutputBundle) {
       return {
-        version: 1,
+        version: 2,
+        mode: options.mode || 'default',
         warnings: [...warnings],
         chunks: Object.values(bundle).flatMap((chunk) => {
           if (chunk.type !== 'chunk') return [];
@@ -182,6 +237,8 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
             {
               file: chunk.fileName,
               kind,
+              canonicalShared: options.mode === 'compact' && chunk.name === 'shared',
+              canonicalGlobal: options.mode === 'compact' && chunk.name === 'global-owner',
               source,
               bytes: Buffer.byteLength(chunk.code),
               imports: chunk.imports,

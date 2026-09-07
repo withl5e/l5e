@@ -43,6 +43,16 @@ interface BundleResult {
   content: string;
 }
 
+export interface ScriptBundleOptions {
+  compact?: boolean;
+  islands?: Array<{ key: string; script: string }>;
+  renderer?: string;
+  name?: 'global' | 'bundle' | 'shared';
+  sharedUrl?: string;
+  globalUrl?: string;
+  exportScripts?: string[];
+}
+
 const EMPTY_RESULT: BundleResult = { hash: '', filename: '', content: '' };
 
 // Memory map để lưu bundled files
@@ -120,22 +130,78 @@ function preserveBuildChunksPlugin(policy: ScriptBundlePolicy): Plugin {
   };
 }
 
+function compactBuildPlugin(
+  policy: ScriptBundlePolicy,
+  sharedUrl?: string,
+  globalUrl?: string,
+): Plugin {
+  return {
+    name: 'compact-build-graph',
+    resolveId(source, importer) {
+      if (!importer || source === VIRTUAL_ENTRY_ID) return null;
+      const file = path.isAbsolute(source)
+        ? path.normalize(source)
+        : source.startsWith('/')
+          ? policy.fileForAssetUrl(source)
+        : source.startsWith('.')
+          ? path.resolve(path.dirname(importer), source)
+          : null;
+      if (!file) return null;
+      return policy.isShared(file) && sharedUrl
+        ? { id: sharedUrl, external: 'absolute' }
+        : policy.isGlobalOwned(file) && globalUrl
+          ? { id: globalUrl, external: 'absolute' }
+        : { id: file };
+    },
+  };
+}
+
 async function runScriptBundle(
   uniquePaths: string[],
   policy: ScriptBundlePolicy,
+  options: ScriptBundleOptions = {},
 ): Promise<BundleResult> {
   const roots = uniquePaths.map((p) => policy.fileForScript(p));
+  const compact = options.compact && policy.compact;
   const suffix = policy.inlineableRoots(roots);
   const prefixChunks = new Map(
     roots.flatMap((file, index) =>
       !policy.isPreserved(file) && !suffix.has(file) ? [[file, `entry-${index}`] as const] : [],
     ),
   );
-  const entryContent = roots.map((filePath) => `import ${JSON.stringify(filePath)};`).join('\n');
+  const islands = (options.islands || []).map(({ key, script }) => ({
+    key,
+    file: policy.fileForScript(script),
+  }));
+  const renderer = options.renderer ? policy.fileForScript(options.renderer) : undefined;
+  const exportFiles = (options.exportScripts || []).map((script) => policy.fileForScript(script));
+  const entryContent = [
+    ...roots.map((filePath) =>
+      options.name === 'shared'
+        ? `export * from ${JSON.stringify(filePath)};`
+        : `import ${JSON.stringify(filePath)};`,
+    ),
+    ...exportFiles.map((filePath) => `export * from ${JSON.stringify(filePath)};`),
+    ...(islands.length
+      ? [
+          'globalThis.__L5E_ISLANDS__ ||= {};',
+          ...islands.map(
+            ({ key, file }) =>
+              `globalThis.__L5E_ISLANDS__[${JSON.stringify(key)}] = async () => { const [renderer, module] = await Promise.all([import(${JSON.stringify(renderer)}), import(${JSON.stringify(file)})]); return { reactDomClient: renderer.reactDomClient, createElement: renderer.createElement, module }; };`,
+          ),
+          'globalThis.__L5E_BOOT_ISLANDS__?.();',
+        ]
+      : []),
+  ].join('\n');
 
   const rolldownOptions: InputOptions = {
     input: VIRTUAL_ENTRY_ID,
-    plugins: [virtualEntryPlugin(entryContent), preserveBuildChunksPlugin(policy)],
+    plugins: [
+      virtualEntryPlugin(entryContent),
+      compact
+        ? compactBuildPlugin(policy, options.sharedUrl, options.globalUrl)
+        : preserveBuildChunksPlugin(policy),
+    ],
     platform: 'neutral',
     tsconfig: false,
     // Runtime scripts are imported for their side effects. Do not let an app's
@@ -156,9 +222,12 @@ async function runScriptBundle(
 
   const outputOptions: OutputOptions = {
     format: 'es',
-    codeSplitting: { groups: [{ name: (id) => prefixChunks.get(id) ?? null }] },
+    codeSplitting: compact
+      ? false
+      : { groups: [{ name: (id) => prefixChunks.get(id) ?? null }] },
     minify: false,
-    entryFileNames: 'bundle-[hash].js',
+    entryFileNames: `${options.name || 'bundle'}-[hash].js`,
+    strictExecutionOrder: compact,
     chunkFileNames: `bundle-${generateHash(JSON.stringify(roots))}-[hash].js`,
   };
 
@@ -206,6 +275,7 @@ export async function bundleScripts(
   scriptPaths: string[],
   distClientDir: string,
   policy?: ScriptBundlePolicy,
+  options: ScriptBundleOptions = {},
 ): Promise<BundleResult> {
   if (scriptPaths.length === 0) {
     return EMPTY_RESULT;
@@ -217,10 +287,10 @@ export async function bundleScripts(
   }
 
   const uniquePaths = [...new Set(scriptPaths)];
-  const cacheKey = `scripts:${policy.cacheKey}:${JSON.stringify(uniquePaths)}`;
+  const cacheKey = `scripts:${policy.cacheKey}:${JSON.stringify([uniquePaths, options])}`;
 
   try {
-    return await dedupe(cacheKey, () => runScriptBundle(uniquePaths, policy));
+    return await dedupe(cacheKey, () => runScriptBundle(uniquePaths, policy, options));
   } catch (error) {
     console.error('[bundler] Error bundling scripts:', error);
     return EMPTY_RESULT;

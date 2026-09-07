@@ -20,6 +20,7 @@ const VIRTUAL_L5E_SSR_ENTRY = 'virtual:l5e-ssr-entry';
 const VIRTUAL_L5E_GLOBAL_LOADER = 'virtual:l5e-global-loader';
 const VIRTUAL_L5E_ISLAND_STRATEGIES = 'virtual:l5e-island-strategies';
 const VIRTUAL_L5E_ISLANDS = 'virtual:l5e-islands';
+const VIRTUAL_L5E_COMPACT_RENDERER = 'virtual:l5e-compact-renderer';
 const VIRTUAL_L5E_ACTIONS = 'virtual:l5e-actions';
 const VIRTUAL_L5E_MIDDLEWARE = 'virtual:l5e-middleware';
 
@@ -575,9 +576,20 @@ export function coreVite(options: CoreViteOptions = {}): Plugin {
         typeof existingInput === 'object' && !Array.isArray(existingInput)
           ? { ...discovered.input, ...existingInput }
           : discovered.input;
+      if (options.chunking && options.chunking.mode === 'compact') {
+        mergedInput['l5e-compact-renderer'] = VIRTUAL_L5E_COMPACT_RENDERER;
+      }
 
       return {
         build: {
+          ...(options.chunking && options.chunking.mode === 'compact'
+            ? {
+                modulePreload: {
+                  resolveDependencies: (_filename: string, dependencies: string[]) =>
+                    dependencies.filter((dependency) => !/\.[cm]?js(?:\?|$)/.test(dependency)),
+                },
+              }
+            : {}),
           rolldownOptions: {
             ...userConfig.build?.rolldownOptions,
             input: Object.keys(mergedInput).length > 0 ? mergedInput : undefined,
@@ -604,6 +616,8 @@ export function coreVite(options: CoreViteOptions = {}): Plugin {
                     chunkFileNames: (chunk) =>
                       chunk.name.startsWith('shared-')
                         ? 'assets/[name]-[hash].js'
+                        : chunk.name === 'shared'
+                          ? 'assets/shared-[hash].js'
                         : chunk.isDynamicEntry
                           ? 'assets/bundle-[name]-[hash].js'
                           : 'assets/shared-[name]-[hash].js',
@@ -634,6 +648,9 @@ export function coreVite(options: CoreViteOptions = {}): Plugin {
       if (id === VIRTUAL_L5E_ISLANDS) {
         return '\0' + VIRTUAL_L5E_ISLANDS;
       }
+      if (id === VIRTUAL_L5E_COMPACT_RENDERER) {
+        return '\0' + VIRTUAL_L5E_COMPACT_RENDERER;
+      }
       if (id === VIRTUAL_L5E_ACTIONS) {
         return '\0' + VIRTUAL_L5E_ACTIONS;
       }
@@ -643,18 +660,18 @@ export function coreVite(options: CoreViteOptions = {}): Plugin {
       return null;
     },
 
-    async transform(code, id, options) {
+    async transform(code, id, transformOptions) {
       // Auto-inject island runtime into client.global.ts so it's always loaded globally
-      if (id.replace(/\\/g, '/').endsWith('src/client.global.ts') && !options?.ssr) {
+      if (id.replace(/\\/g, '/').endsWith('src/client.global.ts') && !transformOptions?.ssr) {
         return {
-          code: `import '@withl5e/l5e/island/runtime';\n${code}`,
+          code: `import '@withl5e/l5e/island/${options.chunking && options.chunking.mode === 'compact' ? 'compact-runtime' : 'runtime'}';\n${code}`,
           map: null,
         };
       }
 
       // Client-side action transform: replace defineAction exports with fetch stubs
       // Supports actions anywhere under src/ (e.g., src/views/*, src/features/*, etc.)
-      if (!options?.ssr) {
+      if (!transformOptions?.ssr) {
         const normalizedId = id.replace(/\\/g, '/');
         const actionMatch = normalizedId.match(/\/src\/(.+)\/actions\.(ts|tsx)$/);
         if (actionMatch) {
@@ -752,7 +769,7 @@ export function coreVite(options: CoreViteOptions = {}): Plugin {
       // Server side cÃ³ thá»ƒ access táº¥t cáº£ env variables
       // Client side chá»‰ access Ä‘Æ°á»£c VITE_ env variables
       // Transform nÃ y cháº¡y á»Ÿ runtime khi module Ä‘Æ°á»£c load trong SSR context
-      if (options?.ssr) {
+      if (transformOptions?.ssr) {
         let transformedCode = code;
         let hasChanges = false;
 
@@ -881,6 +898,9 @@ export async function loadMiddleware() {
       // islands actually present on a page (with ssr) get imported at runtime.
       if (id === '\0' + VIRTUAL_L5E_ISLANDS) {
         return `export const islandModules = import.meta.glob('/src/**/react/*.{tsx,jsx}');`;
+      }
+      if (id === '\0' + VIRTUAL_L5E_COMPACT_RENDERER) {
+        return `export * as reactDomClient from 'react-dom/client'; export { createElement } from 'react';`;
       }
 
       // Virtual module: l5e-island-strategies

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { coreVite } from '../src/core/vite-plugin';
+import { createChunkPlanner } from '../src/core/chunking';
 
 describe('client chunk configuration', () => {
   it('rejects ambiguous names and invalid split targets before starting a build', () => {
@@ -22,6 +23,14 @@ describe('client chunk configuration', () => {
     expect(() =>
       coreVite({ chunking: { shared: [{ name: 'state', packages: ['some-store'], maxSize: 0 }] } }),
     ).toThrow('maxSize');
+    expect(() =>
+      coreVite({
+        chunking: {
+          mode: 'compact',
+          shared: [{ name: 'state', packages: ['some-store'], maxSize: 100_000 }],
+        },
+      }),
+    ).toThrow('cannot use maxSize');
   });
 
   it('requires an explicit choice between framework and raw bundler grouping', () => {
@@ -33,5 +42,34 @@ describe('client chunk configuration', () => {
     expect(() =>
       hook({ build: { rolldownOptions: { output: { codeSplitting: false } } } }),
     ).toThrow('chunking: false');
+  });
+
+  it('rejects a module shared from a dynamic-only global branch', () => {
+    const planner = createChunkPlanner({ mode: 'compact' });
+    const module = (id: string, values: Record<string, unknown>) => ({
+      id,
+      isEntry: false,
+      importedIds: [],
+      dynamicallyImportedIds: [],
+      importers: [],
+      dynamicImporters: [],
+      ...values,
+    });
+    expect(() =>
+      planner.analyze([
+        module('/app/src/client.global.ts', {
+          isEntry: true,
+          dynamicallyImportedIds: ['/app/src/session.ts'],
+        }),
+        module('/app/src/page.ts', {
+          isEntry: true,
+          importedIds: ['/app/src/session.ts'],
+        }),
+        module('/app/src/session.ts', {
+          importers: ['/app/src/page.ts'],
+          dynamicImporters: ['/app/src/client.global.ts'],
+        }),
+      ] as any),
+    ).toThrow('dynamic-only global overlap');
   });
 });

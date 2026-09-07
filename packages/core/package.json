@@ -1,6 +1,6 @@
 {
   "name": "@withl5e/l5e",
-  "version": "1.1.0-alpha.0",
+  "version": "1.1.0-alpha.1",
   "description": "HTML-first SSR MPA framework with loaders, middleware, islands, actions, swap, SEO and cache controls.",
   "type": "module",
   "license": "MIT",
@@ -16,6 +16,8 @@
   "sideEffects": [
     "**/island/runtime.ts",
     "**/island/runtime.js",
+    "**/island/compact-runtime.ts",
+    "**/island/compact-runtime.js",
     "**/*.css"
   ],
   "exports": {
@@ -78,6 +80,10 @@
     "./island/runtime": {
       "types": "./src/island/runtime.ts",
       "default": "./dist/island/runtime.js"
+    },
+    "./island/compact-runtime": {
+      "types": "./src/island/compact-runtime.ts",
+      "default": "./dist/island/compact-runtime.js"
     },
     "./router": {
       "types": "./src/router/index.ts",
