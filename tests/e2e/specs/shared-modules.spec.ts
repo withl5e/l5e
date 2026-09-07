@@ -11,7 +11,7 @@ const coreRoot = fileURLToPath(new URL('../../../packages/core/', import.meta.ur
 type Scenario = {
   name: string;
   globalStore: boolean;
-  chunks?: 'together' | 'separate' | 'configured';
+  chunks?: 'together' | 'separate' | 'configured' | 'compact';
   base?: string;
 };
 
@@ -44,10 +44,18 @@ async function fixture(scenario: Scenario) {
   `,
   );
   await write(
+    'src/global-owned.ts',
+    `window.globalOwnedInitializations = (window.globalOwnedInitializations || 0) + 1; export const globalOwned = { value: 1 };`,
+  );
+  await write(
+    'src/session-two.ts',
+    `window.secondStoreInitializations = (window.secondStoreInitializations || 0) + 1; export const store = { marker: 'second' };`,
+  );
+  await write(
     'src/client.global.ts',
     scenario.globalStore
-      ? `import { store } from './session'; window.globalStore = store;`
-      : `window.bootstrapRan = true;`,
+      ? `import { store } from './session'; import { store as secondStore } from './session-two'; import { globalOwned } from './global-owned'; window.globalStore = store; window.secondStoreFromGlobal = secondStore; window.globalOwnedFromGlobal = globalOwned;`
+      : `import { globalOwned } from './global-owned'; window.bootstrapRan = true; window.globalOwnedFromGlobal = globalOwned;`,
   );
   await write(
     'src/island-strategies.ts',
@@ -68,7 +76,11 @@ async function fixture(scenario: Scenario) {
     'src/page-a.ts',
     `
     import { store } from './direct';
+    import { globalOwned } from './global-owned';
+    import { store as secondStore } from './session-two';
     window.pageAStore = store;
+    window.globalOwnedFromPageA = globalOwned;
+    window.secondStoreFromPageA = secondStore;
     store.subscribe(() => document.querySelector('#plain').textContent = String(store.get()));
     document.querySelector('#increment').onclick = () => store.set(store.get() + 1);
     window.loadLazy = () => import('./lazy').then(mod => mod.store);
@@ -80,7 +92,7 @@ async function fixture(scenario: Scenario) {
     };
   `,
   );
-  await write('src/page-b.ts', `import { store } from './direct'; window.pageBStore = store;`);
+  await write('src/page-b.ts', `import { store } from './direct'; import { globalOwned } from './global-owned'; window.pageBStore = store; window.globalOwnedFromPageB = globalOwned;`);
   await write(
     'src/react/Counter.ts',
     `
@@ -110,7 +122,14 @@ async function fixture(scenario: Scenario) {
     plugins: [
       coreVite({
         chunking:
-          scenario.chunks === 'configured'
+          scenario.chunks === 'compact'
+            ? {
+                mode: 'compact',
+                shared: [
+                  { name: 'state', modules: ['~/session.ts', '~/session-two.ts'] },
+                ],
+              }
+            : scenario.chunks === 'configured'
             ? {
                 shared: [
                   { name: 'state', modules: ['~/session.ts', '~/lazy-sdk.ts'] },
@@ -142,7 +161,9 @@ async function fixture(scenario: Scenario) {
           ]),
         ),
         output:
-          scenario.chunks && scenario.chunks !== 'configured'
+          scenario.chunks &&
+          scenario.chunks !== 'configured' &&
+          scenario.chunks !== 'compact'
             ? {
                 manualChunks: (id) => {
                   const normalized = id.replace(/\\/g, '/');
@@ -194,6 +215,7 @@ async function fixture(scenario: Scenario) {
 for (const scenario of [
   { name: 'automatic chunks', globalStore: true },
   { name: 'configured state and React groups', globalStore: true, chunks: 'configured' },
+  { name: 'compact three-file contract', globalStore: true, chunks: 'compact' },
   { name: 'store absent from global bootstrap', globalStore: false },
   { name: 'developer combines vendor and session', globalStore: true, chunks: 'together' },
   { name: 'developer splits vendor and renames session', globalStore: true, chunks: 'separate' },
@@ -209,11 +231,11 @@ for (const scenario of [
     try {
       await page.goto(site.baseURL);
       await page.waitForFunction(() => !!window.pageAStore);
-      if (!scenario.chunks || scenario.chunks === 'configured') {
+      if (!scenario.chunks || scenario.chunks === 'configured' || scenario.chunks === 'compact') {
         const report = JSON.parse(
           await fs.readFile(path.join(site.root, 'dist/client/.vite/l5e-chunks.json'), 'utf8'),
         );
-        expect(report.version).toBe(1);
+        expect(report.version).toBe(2);
         expect(report.warnings).toEqual([]);
         expect(
           report.chunks.every((chunk) =>
@@ -237,9 +259,30 @@ for (const scenario of [
           const html = await page.content();
           expect(html).not.toContain(`href="/${lazyChunk.file}"`);
         }
+        if (scenario.chunks === 'compact') {
+          expect(report.mode).toBe('compact');
+          const jsUrls = await page.evaluate(() => {
+            const origin = location.origin;
+            return performance
+              .getEntriesByType('resource')
+              .map((entry) => entry.name)
+              .filter((url) => url.startsWith(origin) && /\.js(?:\?|$)/.test(url));
+          });
+          expect(new Set(jsUrls).size).toBeLessThanOrEqual(3);
+        }
       }
       expect(await page.evaluate(() => window.commonRunsAtDirect)).toBe(1);
       expect(await page.evaluate(() => window.commonStore === window.pageAStore)).toBe(true);
+      expect(
+        await page.evaluate(() => window.globalOwnedFromGlobal === window.globalOwnedFromPageA),
+      ).toBe(true);
+      expect(await page.evaluate(() => window.globalOwnedInitializations)).toBe(1);
+      if (scenario.chunks === 'compact') {
+        expect(
+          await page.evaluate(() => window.secondStoreFromGlobal === window.secondStoreFromPageA),
+        ).toBe(true);
+        expect(await page.evaluate(() => window.secondStoreInitializations)).toBe(1);
+      }
       if (scenario.globalStore)
         expect(await page.evaluate(() => window.globalStore === window.pageAStore)).toBe(true);
       expect(await page.evaluate(() => window.islandStore)).toBeUndefined();
@@ -248,33 +291,61 @@ for (const scenario of [
       await expect(page.locator('#plain')).toHaveText('1');
       await page.locator('#mount').click();
       await expect(page.locator('#island-increment')).toHaveText('1');
+      if (scenario.chunks === 'compact') {
+        const jsUrls = await page.evaluate(() =>
+          performance
+            .getEntriesByType('resource')
+            .map((entry) => entry.name)
+            .filter((url) => url.startsWith(location.origin) && /\.js(?:\?|$)/.test(url)),
+        );
+        expect(new Set(jsUrls).size).toBeLessThanOrEqual(3);
+      }
       expect(await page.evaluate(() => window.lazySdkRuns)).toBeUndefined();
       expect(await page.evaluate(async () => (await window.loadLazy()) === window.pageAStore)).toBe(
         true,
       );
       await expect(page.locator('#island-increment')).toHaveCSS('color', 'rgb(1, 2, 3)');
       expect(await page.evaluate(() => window.lazySdkRuns)).toBe(1);
+      if (scenario.chunks === 'compact') {
+        const jsUrls = await page.evaluate(() =>
+          performance
+            .getEntriesByType('resource')
+            .map((entry) => entry.name)
+            .filter((url) => url.startsWith(location.origin) && /\.js(?:\?|$)/.test(url)),
+        );
+        expect(new Set(jsUrls).size).toBeLessThanOrEqual(3);
+      }
       await page.locator('#island-increment').click();
       await expect(page.locator('#plain')).toHaveText('2');
       const html = await (await request.get(site.baseURL + 'b')).text();
       const bundle = html.match(/src="([^" ]*bundle-[^" ]+\.js)"/)?.[1];
       expect(bundle).toBeTruthy();
       const bundleCode = await (await request.get(site.origin + bundle)).text();
-      expect(bundleCode).not.toContain('commonRuns');
+      if (scenario.chunks === 'compact') expect(bundleCode).toContain('commonRuns');
+      else expect(bundleCode).not.toContain('commonRuns');
       expect(bundleCode).toContain('pageBStore');
       expect(bundleCode).not.toContain('storeInitializations');
-      expect(bundleCode).not.toContain('directRuns');
+      if (scenario.chunks === 'compact') expect(bundleCode).toContain('directRuns');
+      else expect(bundleCode).not.toContain('directRuns');
       await page.evaluate((url) => import(url), site.origin + bundle);
       expect(
         await page.evaluate(() => ({
           same:
             window.pageAStore === window.pageBStore && window.islandStore === window.commonStore,
+          globalOwnedSame: window.globalOwnedFromGlobal === window.globalOwnedFromPageB,
           value: window.pageBStore.get(),
           initializations: window.storeInitializations,
           commonRuns: window.commonRuns,
           directRuns: window.directRuns,
         })),
-      ).toEqual({ same: true, value: 2, initializations: 1, commonRuns: 2, directRuns: 1 });
+      ).toEqual({
+        same: true,
+        globalOwnedSame: true,
+        value: 2,
+        initializations: 1,
+        commonRuns: 2,
+        directRuns: scenario.chunks === 'compact' ? 2 : 1,
+      });
       await page.evaluate(() => window.swapFragment());
       await expect(page.locator('#fragment')).toHaveText('Swapped');
       await page.locator('#island-increment').click();

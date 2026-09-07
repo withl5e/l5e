@@ -67,7 +67,13 @@ import 'virtual:l5e-island-strategies';
 
 // Per-page island registry injected by server.ts as inline script
 // Format: { "Counter_a3f2": "/assets/Counter-Abc123.js" }
-const islandRegistry: Record<string, string> = (window as any).__L5E_ISLANDS__ || {};
+type CompactIslandModule = {
+  reactDomClient: typeof import('react-dom/client');
+  createElement: typeof import('react').createElement;
+  module: Record<string, any>;
+};
+type IslandLoader = string | (() => Promise<CompactIslandModule>);
+const islandRegistry: Record<string, IslandLoader> = ((window as any).__L5E_ISLANDS__ ||= {});
 
 // Props for islands rendered in externalized mode live in a single
 // `<script type="application/json" id="_l5e_data_">` at the end of the document
@@ -114,8 +120,8 @@ function createMountFn(island: IslandMeta): () => Promise<void> {
     mounted = true;
 
     // Look up component URL from per-page registry
-    const url = islandRegistry[island.registryKey];
-    if (!url) {
+    const loader = islandRegistry[island.registryKey];
+    if (!loader) {
       console.error(
         `[l5e-island] Component "${island.registryKey}" not found in page registry.`,
         `Available: ${Object.keys(islandRegistry).join(', ')}`,
@@ -124,11 +130,19 @@ function createMountFn(island: IslandMeta): () => Promise<void> {
     }
 
     try {
-      const [reactDomClient, { createElement }, mod] = await Promise.all([
-        import('react-dom/client'),
-        import('react'),
-        import(/* @vite-ignore */ url),
-      ]);
+      const loaded =
+        typeof loader === 'function'
+          ? await loader()
+          : await Promise.all([
+              import('react-dom/client'),
+              import('react'),
+              import(/* @vite-ignore */ loader),
+            ]).then(([reactDomClient, react, module]) => ({
+              reactDomClient,
+              createElement: react.createElement,
+              module,
+            }));
+      const { reactDomClient, createElement, module: mod } = loaded;
 
       const Component = mod.default || mod[island.exportName];
       if (!Component) {

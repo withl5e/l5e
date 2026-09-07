@@ -10,7 +10,11 @@ import { createContext, type MiddlewareHandler, type RewritePayload } from '../m
 import { bundleCss, bundleScripts, getBundledFile } from './bundler';
 import type { RenderResult, RequestInfo } from './entry-server';
 import { resolveGlobalStyleHref, withAssetBase } from './global-style';
-import { createScriptBundlePolicy, type ScriptBundlePolicy } from './script-bundle-policy';
+import {
+  createScriptBundlePolicy,
+  type ChunkingReport,
+  type ScriptBundlePolicy,
+} from './script-bundle-policy';
 import type { Manifest } from 'vite';
 import { escapeProp } from './render';
 import { createHeadersFromExpressRequest, parseCookies } from './request';
@@ -281,6 +285,43 @@ async function createPageResponse({
   }
 
   if (isProduction && manifest) {
+    let compactSharedUrl: string | undefined;
+    let compactGlobalUrl: string | undefined;
+    if (scriptPolicy?.compact) {
+      const sharedScripts = scriptPolicy.sharedScripts();
+      if (sharedScripts.length > 1) {
+        throw new Error('[l5e chunking] Compact build has more than one canonical shared root.');
+      }
+      if (sharedScripts.length === 1) {
+        const bundledShared = await bundleScripts(sharedScripts, distClientDir, scriptPolicy, {
+          compact: true,
+          name: 'shared',
+        });
+        if (!bundledShared.filename) {
+          throw new Error('[l5e chunking] Compact shared bundle failed.');
+        }
+        compactSharedUrl = withAssetBase(assetBase, bundledShared.filename);
+      }
+      const compactGlobalEntry = manifest['src/client.global.ts'];
+      if (compactGlobalEntry?.file) {
+        const bundledGlobal = await bundleScripts(
+          [`/${compactGlobalEntry.file}`],
+          distClientDir,
+          scriptPolicy,
+          {
+            compact: true,
+            name: 'global',
+            sharedUrl: compactSharedUrl,
+            exportScripts: scriptPolicy.globalOwnedScripts(),
+          },
+        );
+        if (!bundledGlobal.filename) {
+          throw new Error('[l5e chunking] Compact global bundle failed.');
+        }
+        compactGlobalUrl = withAssetBase(assetBase, bundledGlobal.filename);
+        globalScripts.push(compactGlobalUrl);
+      }
+    }
     scriptSrcList = scriptSrcList.filter(
       (src) => src.replace(/^\//, '') !== 'src/client.global.ts',
     );
@@ -321,8 +362,28 @@ async function createPageResponse({
       }
     }
 
-    if (mappedScripts.length > 0) {
-      const bundledScript = await bundleScripts(mappedScripts, distClientDir, scriptPolicy);
+    if (mappedScripts.length > 0 || (scriptPolicy?.compact && islandEntries.length > 0)) {
+      const compactIslands = scriptPolicy?.compact
+        ? islandEntries.flatMap((island) => {
+            const entry = manifest[island.src];
+            return entry?.file ? [{ key: island.key, script: `/${entry.file}` }] : [];
+          })
+        : [];
+      const compactRenderer = scriptPolicy?.compact
+        ? Object.entries(manifest).find(([key]) => key.includes('l5e-compact-renderer'))?.[1]
+            ?.file
+        : undefined;
+      if (scriptPolicy?.compact && compactIslands.length > 0 && !compactRenderer) {
+        throw new Error('[l5e chunking] Compact renderer entry is missing from the manifest.');
+      }
+      const bundledScript = await bundleScripts(mappedScripts, distClientDir, scriptPolicy, {
+        compact: scriptPolicy?.compact,
+        islands: compactIslands,
+        name: 'bundle',
+        sharedUrl: compactSharedUrl,
+        renderer: compactRenderer ? `/${compactRenderer}` : undefined,
+        globalUrl: compactGlobalUrl,
+      });
       scriptSrcList = bundledScript.filename
         ? [withAssetBase(assetBase, bundledScript.filename)]
         : mappedScripts.map((file) => withAssetBase(assetBase, file));
@@ -349,15 +410,20 @@ async function createPageResponse({
         });
       }
       if (globalEntry.file) {
-        globalScripts.push(withAssetBase(assetBase, globalEntry.file));
+        if (scriptPolicy?.compact) {
+          // The compact global is built before the page bundle so page imports
+          // can target its live export bridge.
+        } else {
+          globalScripts.push(withAssetBase(assetBase, globalEntry.file));
+        }
       }
     }
 
-    for (const file of preloadFiles) {
+    for (const file of scriptPolicy?.compact ? [] : preloadFiles) {
       extraHead += `<link rel="modulepreload" crossorigin href="${escapeProp(withAssetBase(assetBase, file))}">`;
     }
 
-    if (islandEntries.length > 0) {
+    if (islandEntries.length > 0 && !scriptPolicy?.compact) {
       const islandMap: Record<string, string> = {};
       for (const island of islandEntries) {
         const entry = manifest[island.src];
@@ -497,7 +563,17 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
   let scriptPolicy: ScriptBundlePolicy | undefined;
   if (productionManifest) {
     try {
-      scriptPolicy = createScriptBundlePolicy(productionManifest, distClientDir, base);
+      let chunkingReport: ChunkingReport | undefined;
+      const reportPath = path.join(distClientDir, '.vite/l5e-chunks.json');
+      if (existsSync(reportPath)) {
+        chunkingReport = JSON.parse(await fs.readFile(reportPath, 'utf-8'));
+      }
+      scriptPolicy = createScriptBundlePolicy(
+        productionManifest,
+        distClientDir,
+        base,
+        chunkingReport,
+      );
     } catch (error) {
       console.warn('[bundler] Invalid build manifest; serving original script entries.', error);
     }
@@ -536,11 +612,16 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
     // Route Ä‘á»ƒ serve bundled files tá»« memory map
     // Äáº·t route nÃ y trÆ°á»›c route HTML Ä‘á»ƒ catch request trÆ°á»›c
     app.get(
-      withAssetBase(base, 'bundle-:hash.:ext'),
+      [
+        withAssetBase(base, 'global-:hash.:ext'),
+        withAssetBase(base, 'bundle-:hash.:ext'),
+        withAssetBase(base, 'shared-:hash.:ext'),
+      ],
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
           const { hash, ext } = req.params;
-          const filename = `bundle-${hash}.${ext}`;
+          const kind = path.basename(req.path).split('-', 1)[0];
+          const filename = `${kind}-${hash}.${ext}`;
           const bundledFile = getBundledFile(filename);
 
           if (!bundledFile) {
