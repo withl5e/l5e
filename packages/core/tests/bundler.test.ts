@@ -461,49 +461,42 @@ describe('bundler', () => {
       delete globalThis.__loadBundleLazy;
     }, 30_000);
 
-    it('compact mode emits one bundle and defers an inlined island initializer', async () => {
+    it('compact mode keeps a dynamic island at its emitted URL until activation', async () => {
       const shared = await writeAsset(
         'assets/shared-state.js',
         `globalThis.__compactStore ||= { value: 0 }; export const store = globalThis.__compactStore;`,
       );
       const page = await writeAsset(
         'assets/page.js',
-        `import { store } from './shared-state.js'; globalThis.__pageStore = store;`,
+        `import { store } from './shared-state.js'; globalThis.__pageStore = store; globalThis.__loadCompactIsland = () => import('./island.js');`,
       );
       const island = await writeAsset(
         'assets/island.js',
         `import { store } from './shared-state.js'; globalThis.__islandRuns = (globalThis.__islandRuns || 0) + 1; export default store;`,
       );
-      const renderer = await writeAsset(
-        'assets/renderer.js',
-        `export const reactDomClient = {}; export const createElement = () => {};`,
-      );
       manifest['assets/page.js'].imports = ['assets/shared-state.js'];
+      manifest['assets/page.js'].dynamicImports = ['assets/island.js'];
       manifest['assets/island.js'].imports = ['assets/shared-state.js'];
+      manifest['assets/island.js'].isDynamicEntry = true;
       const policy = createScriptBundlePolicy(manifest, distClientDir, '/', {
         mode: 'compact',
         chunks: [{ file: 'assets/shared-state.js', kind: 'shared', canonicalShared: true }],
       });
       globalThis.__islandRuns = 0;
-      (globalThis as any).__L5E_ISLANDS__ = {};
-
-      const result = await runBundleScripts([page], distClientDir, policy, {
-        compact: true,
-        islands: [{ key: 'fixture', script: island }],
-        renderer,
-      });
+      const result = await runBundleScripts([page], distClientDir, policy, { compact: true });
       const written = await executeBundle(result.filename);
 
       expect([...written]).toHaveLength(1);
+      expect(result.content).toContain('/assets/island.js');
       expect(globalThis.__islandRuns).toBe(0);
-      const loaded = await (globalThis as any).__L5E_ISLANDS__.fixture();
+      const loaded = await globalThis.__loadCompactIsland();
       expect(globalThis.__islandRuns).toBe(1);
-      expect(loaded.module.default).toBe(globalThis.__pageStore);
+      expect(loaded.default).toBe(globalThis.__pageStore);
       expect(shared).toBe('/assets/shared-state.js');
-      delete (globalThis as any).__L5E_ISLANDS__;
       delete globalThis.__compactStore;
       delete globalThis.__pageStore;
       delete globalThis.__islandRuns;
+      delete globalThis.__loadCompactIsland;
     }, 30_000);
   });
 

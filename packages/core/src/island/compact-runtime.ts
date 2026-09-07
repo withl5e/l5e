@@ -41,8 +41,8 @@ type CompactIslandModule = {
   createElement: typeof import('react').createElement;
   module: Record<string, any>;
 };
-const registry: Record<string, () => Promise<CompactIslandModule>> = ((window as any)
-  .__L5E_ISLANDS__ ||= {});
+type CompactIslandPlan = { module: string; renderer: string; js: string[]; css: string[] };
+const registry: Record<string, CompactIslandPlan> = ((window as any).__L5E_ISLANDS__ ||= {});
 let islandData: unknown[] | null = null;
 const scheduled = new WeakSet<Element>();
 
@@ -79,13 +79,51 @@ function mount(island: IslandMeta) {
   return async () => {
     if (mounted) return;
     mounted = true;
-    const loader = registry[island.registryKey];
-    if (!loader) {
+    const plan = registry[island.registryKey];
+    if (!plan) {
       console.error(`[l5e-island] Component "${island.registryKey}" not found in page registry.`);
       return;
     }
     try {
-      const { reactDomClient, createElement, module } = await loader();
+      // Schedule the complete known static closure before awaiting any response.
+      // Modulepreload fetches without evaluating; native import retains ESM order.
+      for (const href of plan.js) {
+        if (document.querySelector(`link[rel="modulepreload"][href="${CSS.escape(href)}"]`))
+          continue;
+        const link = document.createElement('link');
+        link.rel = 'modulepreload';
+        link.crossOrigin = 'anonymous';
+        link.href = href;
+        document.head.append(link);
+      }
+      await Promise.all(
+        plan.css.map(
+          (href) =>
+            new Promise<void>((resolve, reject) => {
+              const existing = document.querySelector<HTMLLinkElement>(
+                `link[rel="stylesheet"][href="${CSS.escape(href)}"]`,
+              );
+              if (existing?.sheet) return resolve();
+              const link = existing || document.createElement('link');
+              link.rel = 'stylesheet';
+              link.crossOrigin = 'anonymous';
+              link.href = href;
+              link.addEventListener('load', () => resolve(), { once: true });
+              link.addEventListener('error', () => reject(new Error(`Failed to load ${href}`)), {
+                once: true,
+              });
+              if (!existing) document.head.append(link);
+            }),
+        ),
+      );
+      const [renderer, module] = await Promise.all([
+        import(/* @vite-ignore */ plan.renderer),
+        import(/* @vite-ignore */ plan.module),
+      ]);
+      const { reactDomClient, createElement } = renderer as Omit<
+        CompactIslandModule,
+        'module'
+      >;
       const Component = module.default || module[island.exportName];
       if (!Component) throw new Error(`No export "default" or "${island.exportName}" in module`);
       if (island.ssr) {
@@ -103,8 +141,7 @@ function mount(island: IslandMeta) {
 function boot() {
   for (const island of discover()) {
     if (scheduled.has(island.element)) continue;
-    // The compact global can execute before the page bundle registers its loaders.
-    // The page bundle calls boot again after registration.
+    // A fragment swap can expose an element before its activation plan is installed.
     if (!registry[island.registryKey]) continue;
     const strategy = strategies.get(island.mount);
     if (!strategy) {

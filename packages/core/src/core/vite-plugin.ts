@@ -585,8 +585,16 @@ export function coreVite(options: CoreViteOptions = {}): Plugin {
           ...(options.chunking && options.chunking.mode === 'compact'
             ? {
                 modulePreload: {
-                  resolveDependencies: (_filename: string, dependencies: string[]) =>
-                    dependencies.filter((dependency) => !/\.[cm]?js(?:\?|$)/.test(dependency)),
+                  resolveDependencies: (
+                    _filename: string,
+                    dependencies: string[],
+                    context: { hostType: 'html' | 'js' },
+                  ) =>
+                    context.hostType === 'html'
+                      ? dependencies.filter(
+                          (dependency) => !/\.[cm]?js(?:\?|$)/.test(dependency),
+                        )
+                      : dependencies,
                 },
               }
             : {}),
@@ -618,6 +626,8 @@ export function coreVite(options: CoreViteOptions = {}): Plugin {
                         ? 'assets/[name]-[hash].js'
                         : chunk.name === 'shared'
                           ? 'assets/shared-[hash].js'
+                          : chunk.name === 'lazy-react-runtime'
+                            ? 'assets/lazy-react-runtime-[hash].js'
                         : chunk.isDynamicEntry
                           ? 'assets/bundle-[name]-[hash].js'
                           : 'assets/shared-[name]-[hash].js',

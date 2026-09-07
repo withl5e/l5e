@@ -47,10 +47,12 @@ export interface ScriptBundleOptions {
   compact?: boolean;
   islands?: Array<{ key: string; script: string }>;
   renderer?: string;
-  name?: 'global' | 'bundle' | 'shared';
+  name?: 'global' | 'bundle' | 'shared' | 'renderer' | 'island';
+  inlineStaticRootClosure?: boolean;
   sharedUrl?: string;
   globalUrl?: string;
   exportScripts?: string[];
+  externalScripts?: Record<string, string>;
 }
 
 const EMPTY_RESULT: BundleResult = { hash: '', filename: '', content: '' };
@@ -134,6 +136,8 @@ function compactBuildPlugin(
   policy: ScriptBundlePolicy,
   sharedUrl?: string,
   globalUrl?: string,
+  eagerFiles = new Set<string>(),
+  externalFiles = new Map<string, string>(),
 ): Plugin {
   return {
     name: 'compact-build-graph',
@@ -147,10 +151,14 @@ function compactBuildPlugin(
           ? path.resolve(path.dirname(importer), source)
           : null;
       if (!file) return null;
-      return policy.isShared(file) && sharedUrl
+      return externalFiles.has(file)
+        ? { id: externalFiles.get(file)!, external: 'absolute' }
+        : policy.isShared(file) && sharedUrl
         ? { id: sharedUrl, external: 'absolute' }
         : policy.isGlobalOwned(file) && globalUrl
           ? { id: globalUrl, external: 'absolute' }
+          : policy.isLazy(file) && !eagerFiles.has(file)
+            ? { id: policy.assetUrl(file), external: 'absolute' }
         : { id: file };
     },
   };
@@ -175,23 +183,26 @@ async function runScriptBundle(
   }));
   const renderer = options.renderer ? policy.fileForScript(options.renderer) : undefined;
   const exportFiles = (options.exportScripts || []).map((script) => policy.fileForScript(script));
+  const eagerFiles = options.inlineStaticRootClosure
+    ? policy.staticClosure(roots)
+    : new Set<string>();
+  const externalFiles = new Map(
+    Object.entries(options.externalScripts || {}).map(([script, url]) => [
+      policy.fileForScript(script),
+      url,
+    ]),
+  );
   const entryContent = [
     ...roots.map((filePath) =>
-      options.name === 'shared'
+      options.name === 'renderer'
+        ? `export { createElement, reactDomClient } from ${JSON.stringify(filePath)};`
+        : options.name === 'island'
+          ? `import * as __island from ${JSON.stringify(filePath)}; export * from ${JSON.stringify(filePath)}; export default __island.default;`
+        : options.name === 'shared'
         ? `export * from ${JSON.stringify(filePath)};`
         : `import ${JSON.stringify(filePath)};`,
     ),
     ...exportFiles.map((filePath) => `export * from ${JSON.stringify(filePath)};`),
-    ...(islands.length
-      ? [
-          'globalThis.__L5E_ISLANDS__ ||= {};',
-          ...islands.map(
-            ({ key, file }) =>
-              `globalThis.__L5E_ISLANDS__[${JSON.stringify(key)}] = async () => { const [renderer, module] = await Promise.all([import(${JSON.stringify(renderer)}), import(${JSON.stringify(file)})]); return { reactDomClient: renderer.reactDomClient, createElement: renderer.createElement, module }; };`,
-          ),
-          'globalThis.__L5E_BOOT_ISLANDS__?.();',
-        ]
-      : []),
   ].join('\n');
 
   const rolldownOptions: InputOptions = {
@@ -199,7 +210,7 @@ async function runScriptBundle(
     plugins: [
       virtualEntryPlugin(entryContent),
       compact
-        ? compactBuildPlugin(policy, options.sharedUrl, options.globalUrl)
+        ? compactBuildPlugin(policy, options.sharedUrl, options.globalUrl, eagerFiles, externalFiles)
         : preserveBuildChunksPlugin(policy),
     ],
     platform: 'neutral',
@@ -244,9 +255,10 @@ async function runScriptBundle(
     if (chunk.type !== 'chunk') {
       continue;
     }
+    const code = (chunk.code || '').replace(/^\/\/#(?:end)?region[^\r\n]*(?:\r?\n)?/gm, '');
     bundledFilesMap.set(chunk.fileName, {
-      content: chunk.code || '',
-      hash: generateHash(chunk.code || ''),
+      content: code,
+      hash: generateHash(code),
       filename: chunk.fileName,
       mimeType: 'application/javascript',
     });
@@ -259,11 +271,12 @@ async function runScriptBundle(
   if (!entryChunk) {
     throw new Error('[bundler] rolldown produced no entry chunk');
   }
+  const entryFile = bundledFilesMap.get(entryChunk.fileName)!;
 
   return {
-    hash: generateHash(entryChunk.code || ''),
+    hash: entryFile.hash,
     filename: entryChunk.fileName,
-    content: entryChunk.code || '',
+    content: entryFile.content,
   };
 }
 
