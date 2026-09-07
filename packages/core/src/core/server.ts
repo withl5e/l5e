@@ -321,6 +321,18 @@ async function createPageResponse({
         compactGlobalUrl = withAssetBase(assetBase, bundledGlobal.filename);
         globalScripts.push(compactGlobalUrl);
       }
+      const imports: Record<string, string> = {};
+      if (compactSharedUrl) {
+        for (const original of sharedScripts) imports[original] = compactSharedUrl;
+      }
+      if (compactGlobalUrl) {
+        for (const original of scriptPolicy.globalOwnedScripts()) {
+          imports[original] = compactGlobalUrl;
+        }
+      }
+      if (Object.keys(imports).length > 0) {
+        extraHead += `<script type="importmap">${serialize({ imports })}</script>`;
+      }
     }
     scriptSrcList = scriptSrcList.filter(
       (src) => src.replace(/^\//, '') !== 'src/client.global.ts',
@@ -345,6 +357,28 @@ async function createPageResponse({
       return { file: entry.file };
     }
 
+    function activationPlan(entryKeys: string[], excluded = new Set<string>()) {
+      const js = new Set<string>();
+      const css = new Set<string>();
+      const visited = new Set<string>();
+      const visit = (entryKey: string) => {
+        if (visited.has(entryKey)) return;
+        visited.add(entryKey);
+        const entry = manifest![entryKey];
+        if (!entry) return;
+        for (const file of entry.css || []) css.add(withAssetBase(assetBase, file));
+        if (!excluded.has(entryKey) && entry.file && /\.[cm]?js$/.test(entry.file)) {
+          const absolute = scriptPolicy!.fileForScript(`/${entry.file}`);
+          if (!scriptPolicy!.isShared(absolute) && !scriptPolicy!.isGlobalOwned(absolute)) {
+            js.add(withAssetBase(assetBase, entry.file));
+          }
+        }
+        for (const dependency of entry.imports || []) visit(dependency);
+      };
+      entryKeys.forEach(visit);
+      return { js: [...js], css: [...css] };
+    }
+
     const mappedScripts: string[] = [];
     for (const src of scriptSrcList) {
       const entryKey = src.replace(/^\//, '');
@@ -362,31 +396,96 @@ async function createPageResponse({
       }
     }
 
-    if (mappedScripts.length > 0 || (scriptPolicy?.compact && islandEntries.length > 0)) {
-      const compactIslands = scriptPolicy?.compact
-        ? islandEntries.flatMap((island) => {
-            const entry = manifest[island.src];
-            return entry?.file ? [{ key: island.key, script: `/${entry.file}` }] : [];
-          })
-        : [];
-      const compactRenderer = scriptPolicy?.compact
-        ? Object.entries(manifest).find(([key]) => key.includes('l5e-compact-renderer'))?.[1]
-            ?.file
-        : undefined;
-      if (scriptPolicy?.compact && compactIslands.length > 0 && !compactRenderer) {
-        throw new Error('[l5e chunking] Compact renderer entry is missing from the manifest.');
-      }
+    if (mappedScripts.length > 0) {
       const bundledScript = await bundleScripts(mappedScripts, distClientDir, scriptPolicy, {
         compact: scriptPolicy?.compact,
-        islands: compactIslands,
         name: 'bundle',
         sharedUrl: compactSharedUrl,
-        renderer: compactRenderer ? `/${compactRenderer}` : undefined,
         globalUrl: compactGlobalUrl,
       });
       scriptSrcList = bundledScript.filename
         ? [withAssetBase(assetBase, bundledScript.filename)]
         : mappedScripts.map((file) => withAssetBase(assetBase, file));
+    }
+
+    if (scriptPolicy?.compact && islandEntries.length > 0) {
+      const rendererEntry = Object.entries(manifest).find(
+        ([key, entry]) => entry.isEntry && key.includes('l5e-compact-renderer'),
+      );
+      if (!rendererEntry?.[1].file) {
+        throw new Error('[l5e chunking] Compact renderer entry is missing from the manifest.');
+      }
+      const rendererOwnedKeys = new Set<string>();
+      rendererOwnedKeys.add(rendererEntry[0]);
+      const rendererDependencies = (rendererEntry[1].imports || []).filter((dependency: string) =>
+        manifest[dependency]?.file?.includes('compact-renderer'),
+      );
+      if (rendererDependencies.length !== 1) {
+        throw new Error(
+          `[l5e chunking] Compact renderer expected one canonical export chunk; found ${rendererDependencies.length}. Multiple chunks can have colliding emitted export aliases.`,
+        );
+      }
+      rendererOwnedKeys.add(rendererDependencies[0]);
+      const bundledRenderer = await bundleScripts(
+        [`/${rendererEntry[1].file}`],
+        distClientDir,
+        scriptPolicy,
+        {
+          compact: true,
+          name: 'renderer',
+          sharedUrl: compactSharedUrl,
+          globalUrl: compactGlobalUrl,
+          inlineStaticRootClosure: true,
+          exportScripts: [...rendererOwnedKeys]
+            .filter((key) => key !== rendererEntry[0])
+            .map((key) => `/${manifest[key].file}`),
+        },
+      );
+      if (!bundledRenderer.filename) {
+        throw new Error('[l5e chunking] Compact renderer bundle failed.');
+      }
+      const rendererUrl = withAssetBase(assetBase, bundledRenderer.filename);
+      const rendererAliases = Object.fromEntries(
+        [...rendererOwnedKeys]
+          .filter((key) => manifest[key]?.file)
+          .map((key) => [`/${manifest[key].file}`, rendererUrl]),
+      );
+      const rendererImports = Object.fromEntries(
+        [...rendererOwnedKeys]
+          .filter((key) => manifest[key]?.file)
+          .map((key) => [withAssetBase(assetBase, manifest[key].file), rendererUrl]),
+      );
+      if (Object.keys(rendererImports).length > 0) {
+        extraHead += `<script type="importmap">${serialize({ imports: rendererImports })}</script>`;
+      }
+      const islandMap: Record<
+        string,
+        { module: string; renderer: string; js: string[]; css: string[] }
+      > = {};
+      for (const island of islandEntries) {
+        const entry = manifest[island.src];
+        if (!entry?.file) continue;
+        const bundledIsland = await bundleScripts([`/${entry.file}`], distClientDir, scriptPolicy, {
+          compact: true,
+          name: 'island',
+          sharedUrl: compactSharedUrl,
+          globalUrl: compactGlobalUrl,
+          inlineStaticRootClosure: true,
+          externalScripts: rendererAliases,
+        });
+        if (!bundledIsland.filename) {
+          throw new Error(`[l5e chunking] Compact island bundle failed: ${island.src}`);
+        }
+        const islandUrl = withAssetBase(assetBase, bundledIsland.filename);
+        const plan = activationPlan([island.src], rendererOwnedKeys);
+        islandMap[island.key] = {
+          module: islandUrl,
+          renderer: rendererUrl,
+          js: [rendererUrl, islandUrl],
+          css: plan.css,
+        };
+      }
+      islandRegistryScript = `<script>Object.assign(window.__L5E_ISLANDS__||={},${serialize(islandMap)});window.__L5E_BOOT_ISLANDS__?.()</script>`;
     }
 
     if (cssFiles.size > 0) {
@@ -616,6 +715,8 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
         withAssetBase(base, 'global-:hash.:ext'),
         withAssetBase(base, 'bundle-:hash.:ext'),
         withAssetBase(base, 'shared-:hash.:ext'),
+        withAssetBase(base, 'renderer-:hash.:ext'),
+        withAssetBase(base, 'island-:hash.:ext'),
       ],
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {

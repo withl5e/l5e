@@ -28,6 +28,7 @@ export function createScriptBundlePolicy(
   const files = new Set<string>();
   const preserved = new Set<string>();
   const staticImports = new Map<string, string[]>();
+  const lazy = new Set<string>();
   const jsEntries = Object.entries(manifest).filter(([, entry]) => /\.[cm]?js$/.test(entry.file));
 
   function absoluteFile(file: string) {
@@ -83,6 +84,34 @@ export function createScriptBundlePolicy(
     );
   }
 
+
+  // A runtime page bundle keeps dynamic roots and their static closure as emitted
+  // assets. This preserves download/init boundaries while allowing the page's
+  // transformed preload helper to start the known closure in parallel.
+  const staticallyInitial = new Set<string>();
+  const visitInitial = (key: string) => {
+    const entry = manifest[key];
+    if (!entry || !/\.[cm]?js$/.test(entry.file)) return;
+    const file = absoluteFile(entry.file);
+    if (staticallyInitial.has(file)) return;
+    staticallyInitial.add(file);
+    for (const dependency of entry.imports || []) visitInitial(dependency);
+  };
+  for (const [key, entry] of jsEntries) {
+    if (entry.isEntry && !entry.isDynamicEntry) visitInitial(key);
+  }
+  const visitLazy = (key: string) => {
+    const entry = manifest[key];
+    if (!entry || !/\.[cm]?js$/.test(entry.file)) return;
+    const file = absoluteFile(entry.file);
+    if (lazy.has(file) || staticallyInitial.has(file)) return;
+    lazy.add(file);
+    for (const dependency of entry.imports || []) visitLazy(dependency);
+  };
+  for (const [, entry] of jsEntries) {
+    for (const key of entry.dynamicImports || []) visitLazy(key);
+  }
+
   const cacheKey = createHash('sha256')
     .update(JSON.stringify([directory, assetDirectory, base, manifest]))
     .digest('hex');
@@ -116,6 +145,19 @@ export function createScriptBundlePolicy(
     },
     isGlobalOwned(file: string) {
       return globalOwned.has(file);
+    },
+    isLazy(file: string) {
+      return lazy.has(file);
+    },
+    staticClosure(roots: string[]) {
+      const closure = new Set<string>();
+      const visit = (file: string) => {
+        if (closure.has(file)) return;
+        closure.add(file);
+        for (const dependency of staticImports.get(file) || []) visit(dependency);
+      };
+      roots.forEach(visit);
+      return closure;
     },
     sharedScripts() {
       return [...shared].map((file) =>

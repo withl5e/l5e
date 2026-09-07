@@ -20,6 +20,8 @@ export interface ChunkingOptions {
    */
   mode?: 'compact';
   shared?: SharedChunkGroup[];
+  /** Static UI/runtime roots that join React's canonical lazy activation chunk. */
+  islandRuntime?: Pick<SharedChunkGroup, 'packages' | 'modules'>;
 }
 
 export interface CoreViteOptions {
@@ -43,6 +45,14 @@ type Decision = { group: string | null; rule?: string; consumers: string[]; reas
 /** One build-time plan drives placement and the diagnostic report. Runtime reads Vite's manifest. */
 export function createChunkPlanner(options: ChunkingOptions = {}) {
   const rules = options.shared || [];
+  const islandRuntimeRule = options.islandRuntime;
+  if (
+    islandRuntimeRule &&
+    !islandRuntimeRule.packages?.length &&
+    !islandRuntimeRule.modules?.length
+  ) {
+    throw new Error('[l5e chunking] islandRuntime needs packages or modules.');
+  }
   if (options.mode === 'compact' && rules.length > 1) {
     throw new Error('[l5e chunking] Compact mode accepts one canonical shared group.');
   }
@@ -66,6 +76,7 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
   }
   let root = '';
   const resolvedRules = new Map<SharedChunkGroup, Set<string>>();
+  let resolvedIslandRuntime = new Set<string>();
   const decisions = new Map<string, Decision>();
   const warnings = new Set<string>();
   const portable = (id: string) => {
@@ -81,6 +92,7 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
     ) {
       root = projectRoot;
       resolvedRules.clear();
+      resolvedIslandRuntime = new Set();
       decisions.clear();
       warnings.clear();
       for (const rule of rules) {
@@ -91,6 +103,13 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
           ids.add(id);
         }
         resolvedRules.set(rule, ids);
+      }
+      if (islandRuntimeRule) {
+        for (const specifier of islandRuntimeRule.modules || []) {
+          const id = await resolveId(specifier, path.join(root, 'index.html'));
+          if (!id) throw new Error(`[l5e chunking] Cannot resolve ${specifier} in islandRuntime`);
+          resolvedIslandRuntime.add(id);
+        }
       }
     },
     analyze(modules: ModuleInfo[]) {
@@ -149,6 +168,7 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
         const mod = graph.get(id)!;
         if (!mod.isEntry) return 3;
         if (normalize(id).endsWith('/src/client.global.ts')) return 0;
+        if (normalize(id).includes('virtual:l5e-compact-renderer')) return 2;
         if (/\/react\//.test(normalize(id)) && !packageName(id)) return 2;
         return 1;
       };
@@ -170,7 +190,26 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
           );
         let group: string | null = null;
         let reason = 'Private dependency stays with its entry or dynamic import.';
-        if (!mod.isEntry && users.length && matches.length) {
+        const pkg = packageName(mod.id);
+        const islandRuntimeMatch =
+          resolvedIslandRuntime.has(mod.id) ||
+          islandRuntimeRule?.packages?.includes(pkg || '') === true;
+        if (
+          options.mode === 'compact' &&
+          normalize(mod.id).includes('virtual:l5e-compact-renderer')
+        ) {
+          group = 'lazy-react-runtime';
+          reason = 'Renderer joins the canonical React runtime activation.';
+        } else if (
+          options.mode === 'compact' &&
+          !mod.isEntry &&
+          (pkg === 'react' || pkg === 'react-dom' || pkg === 'scheduler') &&
+          users.length > 0 &&
+          users.every((id) => rank(id) >= 2)
+        ) {
+          group = 'lazy-react-runtime';
+          reason = 'Canonical React runtime is fetched when the first island activates.';
+        } else if (!mod.isEntry && users.length && matches.length) {
           // Explicit groups can combine consumers at the same activation tier.
           // Never promote island-only code into global/page, or dynamic-only code
           // into a static entry. Distinct dynamic roots remain separate as well.
@@ -181,6 +220,9 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
               : ['global', 'page', 'island'][tier];
           group = options.mode === 'compact' ? 'shared' : `shared-${matches[0].name}-${activation}`;
           reason = `Configured group ${matches[0].name}; activation ${activation}.`;
+        } else if (options.mode === 'compact' && !mod.isEntry && islandRuntimeMatch) {
+          group = 'lazy-react-runtime';
+          reason = 'Configured canonical island runtime is fetched with the first island consumer.';
         } else if (
           options.mode === 'compact' &&
           !mod.isEntry &&
@@ -212,7 +254,15 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
           includeDependenciesRecursively: options.mode === 'compact',
         })),
         {
-          name: (id: string) => decisions.get(id)?.group || null,
+          name: (id: string) =>
+            decisions.get(id)?.group === 'lazy-react-runtime' ? 'lazy-react-runtime' : null,
+          includeDependenciesRecursively: true,
+        },
+        {
+          name: (id: string) => {
+            const group = decisions.get(id)?.group;
+            return group === 'lazy-react-runtime' ? null : group || null;
+          },
           includeDependenciesRecursively: false,
         },
       ];

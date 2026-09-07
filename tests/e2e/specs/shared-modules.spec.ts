@@ -62,6 +62,7 @@ async function fixture(scenario: Scenario) {
     `
     import { registerMountStrategy } from '@withl5e/l5e/island/client';
     registerMountStrategy('click', mount => document.querySelector('#mount').addEventListener('click', mount, { once: true }));
+    registerMountStrategy('click-b', mount => document.querySelector('#mount-b').addEventListener('click', mount, { once: true }));
   `,
   );
   await write(
@@ -96,12 +97,25 @@ async function fixture(scenario: Scenario) {
   await write(
     'src/react/Counter.ts',
     `
+    import './Counter.css';
     import { createElement, useSyncExternalStore } from 'react';
     import { store } from '../session';
     window.islandStore = store;
     export default function Counter() {
       const value = useSyncExternalStore(store.subscribe, store.get);
       return createElement('button', { id: 'island-increment', onClick: () => store.set(value + 1) }, String(value));
+    }
+  `,
+  );
+  await write('src/react/Counter.css', '#island-increment { background-color: rgb(4, 5, 6); }');
+  await write(
+    'src/react/CounterB.ts',
+    `
+    import { createElement, useState } from 'react';
+    window.counterBInitializations = (window.counterBInitializations || 0) + 1;
+    export default function CounterB() {
+      const [value, setValue] = useState(7);
+      return createElement('button', { id: 'counter-b', onClick: () => setValue(value + 1) }, String(value));
     }
   `,
   );
@@ -155,7 +169,7 @@ async function fixture(scenario: Scenario) {
       manifest: true,
       rolldownOptions: {
         input: Object.fromEntries(
-          ['common', 'direct', 'page-a', 'page-b', 'react/Counter'].map((name) => [
+          ['common', 'direct', 'page-a', 'page-b', 'react/Counter', 'react/CounterB'].map((name) => [
             name,
             path.join(root, `src/${name}.ts`),
           ]),
@@ -182,10 +196,23 @@ async function fixture(scenario: Scenario) {
     'dist/server/entry-server.js',
     `
     export async function render(url) {
+      const parsed = new URL(url, 'http://fixture');
+      const strategy = parsed.searchParams.get('strategy');
+      if (strategy) {
+        const ssr = parsed.searchParams.has('ssr');
+        const opts = strategy === 'media' ? ' data-island-opts="(max-width: 500px)"' : '';
+        const spacer = strategy === 'visible' ? '<div style="height:3000px"></div>' : '';
+        const content = ssr ? '<button id="counter-b">7</button>' : '';
+        return {
+          html: '<main>' + spacer + '<div data-island="counter-b" data-island-name="default" data-island-mount="' + strategy + '"' + opts + (ssr ? ' data-island-ssr="1"' : '') + '>' + content + '</div></main>',
+          scripts: ['/src/common.ts', '/src/direct.ts', '/src/page-a.ts'],
+          islands: [{ key: 'counter-b', src: 'src/react/CounterB.ts' }],
+        };
+      }
       return {
-        html: '<main><button id="increment">Increment</button><output id="plain">0</output><button id="mount">Mount</button><section id="fragment"></section><div data-island="counter" data-island-name="default" data-island-mount="click"></div></main>',
+        html: '<main><button id="increment">Increment</button><output id="plain">0</output><button id="mount">Mount</button><button id="mount-b">Mount B</button><section id="fragment"></section><div data-island="counter" data-island-name="default" data-island-mount="click"></div><div data-island="counter-b" data-island-name="default" data-island-mount="click-b"></div></main>',
         scripts: ['/src/common.ts', '/src/direct.ts', url.endsWith('b') ? '/src/page-b.ts' : '/src/page-a.ts'],
-        islands: [{ key: 'counter', src: 'src/react/Counter.ts' }],
+        islands: [{ key: 'counter', src: 'src/react/Counter.ts' }, { key: 'counter-b', src: 'src/react/CounterB.ts' }],
       };
     }
   `,
@@ -216,6 +243,7 @@ for (const scenario of [
   { name: 'automatic chunks', globalStore: true },
   { name: 'configured state and React groups', globalStore: true, chunks: 'configured' },
   { name: 'compact three-file contract', globalStore: true, chunks: 'compact' },
+  { name: 'compact contract under a base path', globalStore: true, chunks: 'compact', base: '/guide/' },
   { name: 'store absent from global bootstrap', globalStore: false },
   { name: 'developer combines vendor and session', globalStore: true, chunks: 'together' },
   { name: 'developer splits vendor and renames session', globalStore: true, chunks: 'separate' },
@@ -224,6 +252,7 @@ for (const scenario of [
   test(`shared module identity: ${scenario.name}`, async ({ page, request }) => {
     const site = await fixture(scenario);
     const errors: string[] = [];
+    let compactInitialJs = new Set<string>();
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
@@ -239,7 +268,7 @@ for (const scenario of [
         expect(report.warnings).toEqual([]);
         expect(
           report.chunks.every((chunk) =>
-            /^assets\/(global-|bundle-|island-|shared-)/.test(chunk.file),
+            /^assets\/(global-|bundle-|island-|shared-|lazy-)/.test(chunk.file),
           ),
         ).toBe(true);
         const stateChunks = report.chunks.filter((chunk) =>
@@ -268,7 +297,10 @@ for (const scenario of [
               .map((entry) => entry.name)
               .filter((url) => url.startsWith(origin) && /\.js(?:\?|$)/.test(url));
           });
-          expect(new Set(jsUrls).size).toBeLessThanOrEqual(3);
+          expect(new Set(jsUrls).size, jsUrls.join('\n')).toBeLessThanOrEqual(3);
+          compactInitialJs = new Set(jsUrls);
+          expect(jsUrls.some((url) => url.includes('lazy-react-runtime'))).toBe(false);
+          expect(jsUrls.some((url) => url.includes('Counter'))).toBe(false);
         }
       }
       expect(await page.evaluate(() => window.commonRunsAtDirect)).toBe(1);
@@ -286,11 +318,49 @@ for (const scenario of [
       if (scenario.globalStore)
         expect(await page.evaluate(() => window.globalStore === window.pageAStore)).toBe(true);
       expect(await page.evaluate(() => window.islandStore)).toBeUndefined();
+      expect(await page.evaluate(() => window.counterBInitializations)).toBeUndefined();
+      if (scenario.chunks === 'compact') {
+        expect(
+          await page.evaluate(() =>
+            performance
+              .getEntriesByType('resource')
+              .some((entry) => entry.name.includes('Counter') && entry.name.includes('.css')),
+          ),
+        ).toBe(false);
+      }
       expect(await page.evaluate(() => window.lazySdkRuns)).toBeUndefined();
       await page.locator('#increment').click();
       await expect(page.locator('#plain')).toHaveText('1');
-      await page.locator('#mount').click();
+      if (scenario.chunks === 'compact') {
+        const plan = await page.evaluate(() => window.__L5E_ISLANDS__.counter);
+        const requested = new Set<string>();
+        page.on('request', (request) => requested.add(request.url()));
+        let release!: () => void;
+        const held = new Promise<void>((resolve) => (release = resolve));
+        let rootRequested = false;
+        await page.route(new URL(plan.module, site.origin).href, async (route) => {
+          rootRequested = true;
+          await held;
+          await route.continue();
+        });
+        await page.locator('#mount').click();
+        await expect.poll(() => rootRequested).toBe(true);
+        expect(
+          plan.js.every((url: string) => requested.has(new URL(url, site.origin).href)),
+          `Requests before island root response: ${[...requested].join('\n')}`,
+        ).toBe(true);
+        release();
+      } else {
+        await page.locator('#mount').click();
+      }
       await expect(page.locator('#island-increment')).toHaveText('1');
+      if (scenario.chunks === 'compact') {
+        await expect(page.locator('#island-increment')).toHaveCSS(
+          'background-color',
+          'rgb(4, 5, 6)',
+        );
+      }
+      expect(await page.evaluate(() => window.counterBInitializations)).toBeUndefined();
       if (scenario.chunks === 'compact') {
         const jsUrls = await page.evaluate(() =>
           performance
@@ -298,7 +368,21 @@ for (const scenario of [
             .map((entry) => entry.name)
             .filter((url) => url.startsWith(location.origin) && /\.js(?:\?|$)/.test(url)),
         );
-        expect(new Set(jsUrls).size).toBeLessThanOrEqual(3);
+        expect(new Set(jsUrls).size).toBeGreaterThan(3);
+        expect(jsUrls.filter((url) => !compactInitialJs.has(url))).toHaveLength(2);
+        expect(jsUrls.some((url) => /\/renderer-[^/]+\.js$/.test(url))).toBe(true);
+      }
+      await page.locator('#mount-b').click();
+      await expect(page.locator('#counter-b')).toHaveText('7');
+      expect(await page.evaluate(() => window.counterBInitializations)).toBe(1);
+      if (scenario.chunks === 'compact') {
+        const jsUrls = await page.evaluate(() =>
+          performance
+            .getEntriesByType('resource')
+            .map((entry) => entry.name)
+            .filter((url) => url.startsWith(location.origin) && /\.js(?:\?|$)/.test(url)),
+        );
+        expect(jsUrls.filter((url) => !compactInitialJs.has(url))).toHaveLength(3);
       }
       expect(await page.evaluate(() => window.lazySdkRuns)).toBeUndefined();
       expect(await page.evaluate(async () => (await window.loadLazy()) === window.pageAStore)).toBe(
@@ -313,7 +397,8 @@ for (const scenario of [
             .map((entry) => entry.name)
             .filter((url) => url.startsWith(location.origin) && /\.js(?:\?|$)/.test(url)),
         );
-        expect(new Set(jsUrls).size).toBeLessThanOrEqual(3);
+        expect(new Set(jsUrls).size).toBeGreaterThan(3);
+        expect(jsUrls.filter((url) => !compactInitialJs.has(url))).toHaveLength(5);
       }
       await page.locator('#island-increment').click();
       await expect(page.locator('#plain')).toHaveText('2');
@@ -366,3 +451,50 @@ for (const scenario of [
     }
   });
 }
+
+test('compact strategies gate download, initialization, and hydration', async ({ page }) => {
+  const site = await fixture({ name: 'strategy stages', globalStore: true, chunks: 'compact' });
+  const initialJs = async () =>
+    page.evaluate(() =>
+      performance
+        .getEntriesByType('resource')
+        .map((entry) => entry.name)
+        .filter((url) => url.startsWith(location.origin) && /\.js(?:\?|$)/.test(url)),
+    );
+  try {
+    await page.goto(`${site.baseURL}?strategy=none`);
+    await page.waitForTimeout(250);
+    expect(await page.evaluate(() => window.counterBInitializations)).toBeUndefined();
+    expect(new Set(await initialJs()).size).toBeLessThanOrEqual(3);
+
+    await page.goto(`${site.baseURL}?strategy=visible`);
+    await page.waitForTimeout(100);
+    expect(await page.evaluate(() => window.counterBInitializations)).toBeUndefined();
+    expect(new Set(await initialJs()).size).toBeLessThanOrEqual(3);
+    await page.locator('[data-island="counter-b"]').scrollIntoViewIfNeeded();
+    await expect(page.locator('#counter-b')).toHaveText('7');
+
+    await page.setViewportSize({ width: 800, height: 600 });
+    await page.goto(`${site.baseURL}?strategy=media`);
+    await page.waitForTimeout(100);
+    expect(await page.evaluate(() => window.counterBInitializations)).toBeUndefined();
+    await page.setViewportSize({ width: 400, height: 600 });
+    await expect(page.locator('#counter-b')).toHaveText('7');
+
+    await page.goto(`${site.baseURL}?strategy=idle`);
+    await expect(page.locator('#counter-b')).toHaveText('7');
+
+    await page.goto(`${site.baseURL}?strategy=load`);
+    await expect(page.locator('#counter-b')).toHaveText('7');
+
+    await page.goto(`${site.baseURL}?strategy=visible&ssr=1`);
+    await expect(page.locator('#counter-b')).toHaveText('7');
+    expect(await page.evaluate(() => window.counterBInitializations)).toBeUndefined();
+    await page.locator('[data-island="counter-b"]').scrollIntoViewIfNeeded();
+    await expect.poll(() => page.evaluate(() => window.counterBInitializations)).toBe(1);
+    await page.locator('#counter-b').click();
+    await expect(page.locator('#counter-b')).toHaveText('8');
+  } finally {
+    await site.close();
+  }
+});

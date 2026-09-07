@@ -31,6 +31,9 @@ describe('client chunk configuration', () => {
         },
       }),
     ).toThrow('cannot use maxSize');
+    expect(() => coreVite({ chunking: { mode: 'compact', islandRuntime: {} } })).toThrow(
+      'islandRuntime needs packages or modules',
+    );
   });
 
   it('requires an explicit choice between framework and raw bundler grouping', () => {
