@@ -11,6 +11,8 @@ import {
 import { dirname, join, relative, resolve } from 'path';
 import type { Plugin, UserConfig } from 'vite';
 import { findGlobalStyleInput } from './global-style';
+import { createChunkPlanner, type CoreViteOptions } from './chunking';
+export type { CoreViteOptions, ChunkingOptions, SharedChunkGroup } from './chunking';
 
 const VIRTUAL_L5E_VIEWS = 'virtual:l5e-views';
 const VIRTUAL_L5E_ROUTE = 'virtual:l5e-route';
@@ -436,8 +438,10 @@ function injectIslandKeys(
   return result.join('');
 }
 
-export function coreVite(): Plugin {
+export function coreVite(options: CoreViteOptions = {}): Plugin {
   let rootDir: string = process.cwd();
+  let clientBuild = false;
+  const planner = options.chunking === false ? null : createChunkPlanner(options.chunking);
   let islandRegistry = new Map<string, string>();
   let pathToKey = new Map<string, string>();
   let keyToSrc = new Map<string, string>();
@@ -450,6 +454,26 @@ export function coreVite(): Plugin {
     configResolved(resolvedConfig) {
       // Store root directory for later use
       rootDir = resolvedConfig.root || process.cwd();
+      clientBuild = resolvedConfig.command === 'build' && !resolvedConfig.build.ssr;
+    },
+
+    async buildStart() {
+      if (clientBuild && planner) {
+        await planner.resolve(rootDir, async (id, importer) => {
+          const resolved = await this.resolve(id, importer);
+          return resolved && !resolved.external ? resolved.id : null;
+        });
+      }
+    },
+
+    generateBundle(_options, bundle) {
+      if (clientBuild && planner) {
+        this.emitFile({
+          type: 'asset',
+          fileName: '.vite/l5e-chunks.json',
+          source: JSON.stringify(planner.report(bundle), null, 2),
+        });
+      }
     },
 
     handleHotUpdate({ file, server }) {
@@ -492,7 +516,13 @@ export function coreVite(): Plugin {
       }
     },
 
-    buildEnd() {
+    buildEnd(error) {
+      if (!error && clientBuild && planner) {
+        const modules = [...this.getModuleIds()]
+          .map((id) => this.getModuleInfo(id))
+          .filter((mod) => mod !== null);
+        for (const warning of planner.analyze(modules)) this.warn(`[l5e chunking] ${warning}`);
+      }
       // Cleanup temporary files after build
       const tempDir = join(rootDir, '.l5e-temp');
       if (existsSync(tempDir)) {
@@ -521,6 +551,16 @@ export function coreVite(): Plugin {
     config(userConfig) {
       // Auto-discover bundler input from useCss and useClientJs
       const projectRoot = userConfig.root || process.cwd();
+      const output = userConfig.build?.rolldownOptions?.output;
+      const configureChunks = !userConfig.build?.ssr && planner !== null;
+      if (
+        configureChunks &&
+        (Array.isArray(output) || output?.manualChunks || output?.codeSplitting !== undefined)
+      ) {
+        throw new Error(
+          '[l5e chunking] Use coreVite({ chunking: { shared: [...] } }) or set chunking: false when configuring raw Rolldown chunk placement.',
+        );
+      }
       const discovered = discoverBundlerInput(projectRoot);
 
       // Store island registries for use in other hooks
@@ -544,7 +584,32 @@ export function coreVite(): Plugin {
             // Preserve exports for island component entries â€” without this,
             // The bundler tree-shakes their exports since nothing imports them
             // (they're loaded at runtime via dynamic import from the island runtime).
-            preserveEntrySignatures: 'exports-only',
+            preserveEntrySignatures: configureChunks ? 'allow-extension' : 'exports-only',
+            ...(configureChunks
+              ? {
+                  output: {
+                    ...output,
+                    strictExecutionOrder: true,
+                    codeSplitting: { groups: planner!.groups() },
+                    entryFileNames: (chunk) => {
+                      const source = chunk.facadeModuleId?.replace(/\\/g, '/') || '';
+                      if (source.endsWith('/src/client.global.ts'))
+                        return 'assets/global-[hash].js';
+                      if (/\/react\//.test(source))
+                        return chunk.name.startsWith('island-')
+                          ? 'assets/[name]-[hash].js'
+                          : 'assets/island-[name]-[hash].js';
+                      return 'assets/bundle-[name]-[hash].js';
+                    },
+                    chunkFileNames: (chunk) =>
+                      chunk.name.startsWith('shared-')
+                        ? 'assets/[name]-[hash].js'
+                        : chunk.isDynamicEntry
+                          ? 'assets/bundle-[name]-[hash].js'
+                          : 'assets/shared-[name]-[hash].js',
+                  },
+                }
+              : {}),
           },
         },
       } satisfies UserConfig;

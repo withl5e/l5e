@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { InputOptions, OutputChunk, OutputOptions, Plugin } from 'rolldown';
+import type { ScriptBundlePolicy } from './script-bundle-policy';
 
 let rolldownModulePromise: Promise<typeof import('rolldown')> | null = null;
 
@@ -99,60 +100,42 @@ function virtualEntryPlugin(entryContent: string): Plugin {
   };
 }
 
-/**
- * Rewrite vendor/chunk/global imports thành web path và để chúng external.
- * Global files (*.global.*) đã được client.global.ts load — bundle lại sẽ tạo
- * module instance trùng (vd nanostores).
- */
-function vendorPathRewriterPlugin(distClientDir: string): Plugin {
-  const toWebPath = (absolutePath: string) =>
-    '/' + path.relative(distClientDir, absolutePath).replace(/\\/g, '/');
-
+/** Inline page roots only; their emitted dependencies retain canonical URLs. */
+function preserveBuildChunksPlugin(policy: ScriptBundlePolicy): Plugin {
   return {
-    name: 'vendor-path-rewriter',
+    name: 'preserve-build-chunks',
     resolveId(source, importer) {
-      if (
-        !source.includes('vendor-') &&
-        !source.includes('chunk-') &&
-        !source.includes('.global')
-      ) {
-        return null;
-      }
-
-      if (path.isAbsolute(source)) {
-        // e.g. C:\...\dist\client\assets\vendor-react-XXX.js -> /assets/vendor-react-XXX.js
-        return { id: toWebPath(source), external: 'absolute' };
-      }
-
-      if (importer && source.startsWith('.')) {
-        // Relative path như ./auth.global-BOVr81Z5.js — resolve từ importer
-        return {
-          id: toWebPath(path.resolve(path.dirname(importer), source)),
-          external: 'absolute',
-        };
-      }
-
-      return null;
+      if (!importer || source === VIRTUAL_ENTRY_ID) return null;
+      const file = path.isAbsolute(source)
+        ? path.normalize(source)
+        : source.startsWith('.')
+          ? path.resolve(path.dirname(importer), source)
+          : null;
+      if (!file) return null;
+      // The virtual entry is the only place where an unshared page entry may
+      // be inlined. Never traverse an emitted dependency to re-bundle its body.
+      if (importer === VIRTUAL_ENTRY_ID && !policy.isPreserved(file)) return null;
+      return { id: policy.assetUrl(file), external: 'absolute' };
     },
   };
 }
 
 async function runScriptBundle(
   uniquePaths: string[],
-  distClientDir: string,
+  policy: ScriptBundlePolicy,
 ): Promise<BundleResult> {
-  const entryContent = uniquePaths
-    .map((p) => {
-      const filePath = p.startsWith('/')
-        ? path.join(distClientDir, p.substring(1))
-        : path.join(distClientDir, p);
-      return `import ${JSON.stringify(filePath)};`;
-    })
-    .join('\n');
+  const roots = uniquePaths.map((p) => policy.fileForScript(p));
+  const suffix = policy.inlineableRoots(roots);
+  const prefixChunks = new Map(
+    roots.flatMap((file, index) =>
+      !policy.isPreserved(file) && !suffix.has(file) ? [[file, `entry-${index}`] as const] : [],
+    ),
+  );
+  const entryContent = roots.map((filePath) => `import ${JSON.stringify(filePath)};`).join('\n');
 
   const rolldownOptions: InputOptions = {
     input: VIRTUAL_ENTRY_ID,
-    plugins: [virtualEntryPlugin(entryContent), vendorPathRewriterPlugin(distClientDir)],
+    plugins: [virtualEntryPlugin(entryContent), preserveBuildChunksPlugin(policy)],
     platform: 'neutral',
     tsconfig: false,
     // Runtime scripts are imported for their side effects. Do not let an app's
@@ -166,17 +149,17 @@ async function runScriptBundle(
         return true;
       }
 
-      // Vendor/chunk/global do plugin resolveId lo phần rewrite path
+      // Emitted file imports are resolved by preserveBuildChunksPlugin.
       return false;
     },
   };
 
   const outputOptions: OutputOptions = {
     format: 'es',
-    codeSplitting: true,
+    codeSplitting: { groups: [{ name: (id) => prefixChunks.get(id) ?? null }] },
     minify: false,
     entryFileNames: 'bundle-[hash].js',
-    chunkFileNames: 'bundle-[hash].js',
+    chunkFileNames: `bundle-${generateHash(JSON.stringify(roots))}-[hash].js`,
   };
 
   const { rolldown } = await loadRolldown();
@@ -222,26 +205,29 @@ async function runScriptBundle(
 export async function bundleScripts(
   scriptPaths: string[],
   distClientDir: string,
+  policy?: ScriptBundlePolicy,
 ): Promise<BundleResult> {
   if (scriptPaths.length === 0) {
     return EMPTY_RESULT;
   }
 
-  const uniquePaths = [...new Set(scriptPaths)].sort();
-  const cacheKey = `scripts:${uniquePaths.join(',')}`;
+  if (!policy || policy.directory !== path.resolve(distClientDir)) {
+    console.warn('[bundler] No matching build manifest; serving original script entries.');
+    return EMPTY_RESULT;
+  }
+
+  const uniquePaths = [...new Set(scriptPaths)];
+  const cacheKey = `scripts:${policy.cacheKey}:${JSON.stringify(uniquePaths)}`;
 
   try {
-    return await dedupe(cacheKey, () => runScriptBundle(uniquePaths, distClientDir));
+    return await dedupe(cacheKey, () => runScriptBundle(uniquePaths, policy));
   } catch (error) {
     console.error('[bundler] Error bundling scripts:', error);
     return EMPTY_RESULT;
   }
 }
 
-async function runCssBundle(
-  uniquePaths: string[],
-  distClientDir: string,
-): Promise<BundleResult> {
+async function runCssBundle(uniquePaths: string[], distClientDir: string): Promise<BundleResult> {
   const cssContents: string[] = [];
 
   for (const cssPath of uniquePaths) {
@@ -276,16 +262,13 @@ async function runCssBundle(
  * Bundle CSS files từ dist/client thành 1 file
  * Trong production, các file đã được build sẵn trong dist/client
  */
-export async function bundleCss(
-  cssPaths: string[],
-  distClientDir: string,
-): Promise<BundleResult> {
+export async function bundleCss(cssPaths: string[], distClientDir: string): Promise<BundleResult> {
   if (cssPaths.length === 0) {
     return EMPTY_RESULT;
   }
 
   const uniquePaths = [...new Set(cssPaths)].sort();
-  const cacheKey = `css:${uniquePaths.join(',')}`;
+  const cacheKey = `css:${JSON.stringify([path.resolve(distClientDir), uniquePaths])}`;
 
   try {
     return await dedupe(cacheKey, () => runCssBundle(uniquePaths, distClientDir));

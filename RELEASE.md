@@ -12,6 +12,18 @@ publish or stable deploy happens if `pnpm build / test / typecheck` fails.
 
 The actual workflow lives at [`.github/workflows/release.yml`](./.github/workflows/release.yml).
 
+## 1.1.0-alpha.0
+
+Alpha-only client chunk planning adds `coreVite({ chunking: { shared } })`,
+graph-based defaults, `.vite/l5e-chunks.json`, and manifest-driven runtime
+bundling. Runtime roots retain SSR registration order and canonical dependencies
+keep one module identity. Static global/page preloads are recursive; dynamic
+imports and island mounts stay deferred. See [client chunks](docs-site/content/29-chunking.md).
+
+Existing raw `manualChunks`/`codeSplitting` users must migrate to `shared` groups
+or explicitly set `chunking: false`. This release uses npm's `alpha` dist-tag;
+it does not update `latest` or deploy the production docs site.
+
 ## 1.0.0 migration notes
 
 Version `1.0.0` moves the framework peer dependency to Vite 8, adopts Vite 8's
