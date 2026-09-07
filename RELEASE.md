@@ -12,6 +12,19 @@ publish or stable deploy happens if `pnpm build / test / typecheck` fails.
 
 The actual workflow lives at [`.github/workflows/release.yml`](./.github/workflows/release.yml).
 
+## 1.0.1-rc.0 runtime bundling
+
+Runtime JavaScript bundles now preserve dependency chunks from the application's
+build manifest instead of recognizing vendor/global filenames. Developer-defined
+chunk names and grouping remain intact, and shared stores no longer require a
+`.global.ts` suffix or an import from global bootstrap. Page entry code is still
+combined at request time. See [the runtime bundling contract](docs/runtime-script-bundling.md).
+
+Production manifests are cached per server build; restart the server when replacing
+its output. Missing dependency metadata falls back to original entry URLs. The
+release gate includes Chromium regression tests for shared state across runtime
+bundles, lazy React islands, developer chunk configurations and a base path.
+
 ## 1.0.0 migration notes
 
 Version `1.0.0` moves the framework peer dependency to Vite 8, adopts Vite 8's
@@ -31,13 +44,13 @@ Before releasing or upgrading an existing application, follow
 
 ## What gets bumped — 5 files
 
-| File | Field |
-|---|---|
-| `packages/core/package.json` | `version` |
-| `packages/richtext-payload/package.json` | `version` and `peerDependencies["@withl5e/l5e"]` → `^<new>` |
-| `packages/create-l5e/package.json` | `version` |
-| `packages/create-l5e/templates/basic/package.json` | `dependencies["@withl5e/l5e"]` → `^<new>` |
-| `packages/create-l5e/templates/minimal/package.json` | `dependencies["@withl5e/l5e"]` → `^<new>` |
+| File                                                 | Field                                                       |
+| ---------------------------------------------------- | ----------------------------------------------------------- |
+| `packages/core/package.json`                         | `version`                                                   |
+| `packages/richtext-payload/package.json`             | `version` and `peerDependencies["@withl5e/l5e"]` → `^<new>` |
+| `packages/create-l5e/package.json`                   | `version`                                                   |
+| `packages/create-l5e/templates/basic/package.json`   | `dependencies["@withl5e/l5e"]` → `^<new>`                   |
+| `packages/create-l5e/templates/minimal/package.json` | `dependencies["@withl5e/l5e"]` → `^<new>`                   |
 
 The three packages must share the same version (the release workflow
 verifies this before publishing). The richtext adapter and two templates
@@ -59,16 +72,16 @@ pnpm bump <version|keyword>
 
 ### Forms
 
-| Command | Behavior | Example (current `0.1.1-alpha.2`) |
-|---|---|---|
-| `pnpm bump 0.1.2-alpha.0` | Set everything to the exact version | → `0.1.2-alpha.0` |
-| `pnpm bump prerelease` | Bump the prerelease counter | → `0.1.1-alpha.3` |
-| `pnpm bump patch` | Strip prerelease, bump patch | → `0.1.2` |
-| `pnpm bump minor` | Strip prerelease, bump minor | → `0.2.0` |
-| `pnpm bump major` | Strip prerelease, bump major | → `1.0.0` |
-| `pnpm bump alpha` | Switch label to `alpha`, reset counter to 0 | → `0.1.2-alpha.0` |
-| `pnpm bump beta` | Switch to `beta` | → `0.1.2-beta.0` |
-| `pnpm bump rc` | Switch to `rc` (publishes under `next` dist-tag) | → `0.1.2-rc.0` |
+| Command                   | Behavior                                         | Example (current `0.1.1-alpha.2`) |
+| ------------------------- | ------------------------------------------------ | --------------------------------- |
+| `pnpm bump 0.1.2-alpha.0` | Set everything to the exact version              | → `0.1.2-alpha.0`                 |
+| `pnpm bump prerelease`    | Bump the prerelease counter                      | → `0.1.1-alpha.3`                 |
+| `pnpm bump patch`         | Strip prerelease, bump patch                     | → `0.1.2`                         |
+| `pnpm bump minor`         | Strip prerelease, bump minor                     | → `0.2.0`                         |
+| `pnpm bump major`         | Strip prerelease, bump major                     | → `1.0.0`                         |
+| `pnpm bump alpha`         | Switch label to `alpha`, reset counter to 0      | → `0.1.2-alpha.0`                 |
+| `pnpm bump beta`          | Switch to `beta`                                 | → `0.1.2-beta.0`                  |
+| `pnpm bump rc`            | Switch to `rc` (publishes under `next` dist-tag) | → `0.1.2-rc.0`                    |
 
 ### Safety rails
 
@@ -119,27 +132,27 @@ start a new major line, backward-compatible features bump the minor version, and
 compatible fixes bump the patch version. Use prerelease keywords when validating an
 alpha, beta, or release candidate:
 
-| When you… | Run | Becomes |
-|---|---|---|
-| Change a required peer or runtime in a breaking way | `pnpm bump major` | `1.0.0` → `2.0.0` |
-| Ship a backward-compatible feature | `pnpm bump minor` | `1.0.0` → `1.1.0` |
-| Ship a compatible fix | `pnpm bump patch` | `1.0.0` → `1.0.1` |
-| Fix a bug during the current alpha cycle | `pnpm bump prerelease` | `0.1.1-alpha.2` → `0.1.1-alpha.3` |
-| Start a new alpha cycle on a new patch | `pnpm bump alpha` | `0.1.1-alpha.3` → `0.1.2-alpha.0` |
-| Promote alpha → beta | `pnpm bump beta` | `0.1.2-alpha.5` → `0.1.2-beta.0` |
-| Cut the first stable release | `pnpm bump 1.0.0` | `1.0.0-rc.4` → `1.0.0` |
+| When you…                                           | Run                    | Becomes                           |
+| --------------------------------------------------- | ---------------------- | --------------------------------- |
+| Change a required peer or runtime in a breaking way | `pnpm bump major`      | `1.0.0` → `2.0.0`                 |
+| Ship a backward-compatible feature                  | `pnpm bump minor`      | `1.0.0` → `1.1.0`                 |
+| Ship a compatible fix                               | `pnpm bump patch`      | `1.0.0` → `1.0.1`                 |
+| Fix a bug during the current alpha cycle            | `pnpm bump prerelease` | `0.1.1-alpha.2` → `0.1.1-alpha.3` |
+| Start a new alpha cycle on a new patch              | `pnpm bump alpha`      | `0.1.1-alpha.3` → `0.1.2-alpha.0` |
+| Promote alpha → beta                                | `pnpm bump beta`       | `0.1.2-alpha.5` → `0.1.2-beta.0`  |
+| Cut the first stable release                        | `pnpm bump 1.0.0`      | `1.0.0-rc.4` → `1.0.0`            |
 
 ## NPM dist-tags
 
 The `publish-npm` job auto-derives the dist-tag from the version's
 prerelease suffix. You don't pass it manually.
 
-| Version pattern | npm dist-tag | Install command |
-|---|---|---|
-| `x.y.z-alpha.N` | `alpha` | `npm i @withl5e/l5e@alpha` |
-| `x.y.z-beta.N` | `beta` | `npm i @withl5e/l5e@beta` |
-| `x.y.z-rc.N` | `next` | `npm i @withl5e/l5e@next` |
-| `x.y.z` (no suffix) | `latest` | `npm i @withl5e/l5e` |
+| Version pattern     | npm dist-tag | Install command            |
+| ------------------- | ------------ | -------------------------- |
+| `x.y.z-alpha.N`     | `alpha`      | `npm i @withl5e/l5e@alpha` |
+| `x.y.z-beta.N`      | `beta`       | `npm i @withl5e/l5e@beta`  |
+| `x.y.z-rc.N`        | `next`       | `npm i @withl5e/l5e@next`  |
+| `x.y.z` (no suffix) | `latest`     | `npm i @withl5e/l5e`       |
 
 ## CI/CD jobs (what runs on tag push)
 
@@ -180,9 +193,10 @@ image, Swarm deployment, and Cloudflare purge.
 
    Auth uses the auto-provided `GITHUB_TOKEN`; the job declares
    `permissions: packages: write` to enable it.
+
 3. SSH into the Swarm manager and run a single
    `docker service update --image <version-tag> --with-registry-auth
-   --force l5e_docs` — Swarm rolls the running tasks with `start-first`,
+--force l5e_docs` — Swarm rolls the running tasks with `start-first`,
    rolling back automatically if the new task fails to come up.
 4. POST to Cloudflare `purge_cache` with `{"tags":["global"]}` so
    edge caches re-fetch the new docs immediately.
@@ -196,15 +210,15 @@ it on each release.
 
 Configure under **Settings → Secrets and variables → Actions**.
 
-| Name | Used by | How to get it |
-|---|---|---|
-| `NPM_TOKEN` | `publish-npm` | npmjs.com → Access Tokens → granular automation token, publish scope on `@withl5e/*` and `create-l5e` |
-| `VPS_HOST` | `deploy-docker` | Public IP / domain of the Swarm manager |
-| `VPS_USER` | `deploy-docker` | SSH user on the manager |
-| `VPS_SSH_KEY` | `deploy-docker` | Private key (PEM block) whose public half lives in the manager's `~/.ssh/authorized_keys` |
-| `VPS_PORT` *(optional)* | `deploy-docker` | SSH port if not `22` |
-| `CF_ZONE_ID` | `deploy-docker` | Cloudflare Zone ID (Cloudflare dashboard → zone → Overview, right sidebar) |
-| `CF_TOKEN` | `deploy-docker` | Cloudflare API token with `Zone.Cache Purge` permission, scoped to that zone |
+| Name                    | Used by         | How to get it                                                                                         |
+| ----------------------- | --------------- | ----------------------------------------------------------------------------------------------------- |
+| `NPM_TOKEN`             | `publish-npm`   | npmjs.com → Access Tokens → granular automation token, publish scope on `@withl5e/*` and `create-l5e` |
+| `VPS_HOST`              | `deploy-docker` | Public IP / domain of the Swarm manager                                                               |
+| `VPS_USER`              | `deploy-docker` | SSH user on the manager                                                                               |
+| `VPS_SSH_KEY`           | `deploy-docker` | Private key (PEM block) whose public half lives in the manager's `~/.ssh/authorized_keys`             |
+| `VPS_PORT` _(optional)_ | `deploy-docker` | SSH port if not `22`                                                                                  |
+| `CF_ZONE_ID`            | `deploy-docker` | Cloudflare Zone ID (Cloudflare dashboard → zone → Overview, right sidebar)                            |
+| `CF_TOKEN`              | `deploy-docker` | Cloudflare API token with `Zone.Cache Purge` permission, scoped to that zone                          |
 
 > **ghcr.io auth** uses the auto-provided `GITHUB_TOKEN` — no manual
 > secret needed. The Swarm manager needs its own `docker login ghcr.io`

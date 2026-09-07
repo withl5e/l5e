@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:shared-modules": "playwright test --config playwright.shared-modules.config.ts",
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "report": "playwright show-report"
