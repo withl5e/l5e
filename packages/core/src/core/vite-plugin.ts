@@ -673,8 +673,10 @@ export function coreVite(options: CoreViteOptions = {}): Plugin {
     async transform(code, id, transformOptions) {
       // Auto-inject island runtime into client.global.ts so it's always loaded globally
       if (id.replace(/\\/g, '/').endsWith('src/client.global.ts') && !transformOptions?.ssr) {
+        const compactRuntime =
+          clientBuild && options.chunking && options.chunking.mode === 'compact';
         return {
-          code: `import '@withl5e/l5e/island/${options.chunking && options.chunking.mode === 'compact' ? 'compact-runtime' : 'runtime'}';\n${code}`,
+          code: `import '@withl5e/l5e/island/${compactRuntime ? 'compact-runtime' : 'runtime'}';\n${code}`,
           map: null,
         };
       }

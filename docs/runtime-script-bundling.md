@@ -43,7 +43,7 @@ initial shell and each L5E island activation to at most three **new** JavaScript
 assets. The limit is per loading stage, not for the document's whole lifetime:
 
 > The staged activation behavior and `islandRuntime` option described here are
-> available on the `1.1.0-alpha.2` prerelease. Stable `1.0.1` does not provide them.
+> available on the `1.1.0-alpha.3` prerelease. Stable `1.0.1` does not provide them.
 
 - the shell loads the global bootstrap, page bundle and, when needed, canonical
   shared state;
@@ -171,6 +171,10 @@ commit `76ca567`; release CI tested merge commit `5cbdf93` before publishing alp
 
 Compact mode is opt-in. The default mode retains the existing emitted-chunk behavior
 and identity guarantees.
+
+Compact chunking applies to production build artifacts. During development, islands
+keep Vite's source-module loading and HMR behavior, so the production limit of three
+new emitted JavaScript assets per stage does not apply to the development Network log.
 
 Only page entry code is recombined. Side effects local to a page entry can run
 again if that entry participates in another runtime bundle. Put state shared

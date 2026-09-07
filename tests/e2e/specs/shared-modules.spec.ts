@@ -2,11 +2,74 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build } from 'vite';
+import { build, createServer as createViteServer } from 'vite';
 import { coreVite } from '../../../packages/core/dist/vite-plugin.js';
 import { createServer } from '../../../packages/core/dist/server.js';
 
 const coreRoot = fileURLToPath(new URL('../../../packages/core/', import.meta.url));
+
+test('compact config uses the development island loader contract', async ({ page }) => {
+  const parent = path.join(coreRoot, 'tests/.l5e-temp');
+  await fs.mkdir(parent, { recursive: true });
+  const root = await fs.mkdtemp(path.join(parent, 'compact-dev-'));
+  await fs.mkdir(path.join(root, 'src'), { recursive: true });
+  await fs.writeFile(path.join(root, 'package.json'), '{"type":"module"}');
+  await fs.writeFile(
+    path.join(root, 'index.html'),
+    `<main><div data-island="counter" data-island-name="default" data-island-mount="media" data-island-opts="(min-width: 2000px)"></div></main>
+     <script type="module">
+       window.__L5E_ISLANDS__ = {
+         counter: '/src/Counter.js',
+       };
+       await import('/src/client.global.ts');
+     </script>`,
+  );
+  await fs.writeFile(path.join(root, 'src/client.global.ts'), 'window.bootstrapRan = true;');
+  await fs.writeFile(
+    path.join(root, 'src/Counter.js'),
+    `import { createElement } from 'react';
+     export default function Counter() { return createElement('output', { id: 'mounted' }, 'mounted'); }`,
+  );
+  const server = await createViteServer({
+    root,
+    configFile: false,
+    logLevel: 'error',
+    resolve: {
+      alias: {
+        '@withl5e/l5e/island/compact-runtime': path.join(
+          coreRoot,
+          'dist/island/compact-runtime.js',
+        ),
+        '@withl5e/l5e/island/runtime': path.join(coreRoot, 'dist/island/runtime.js'),
+      },
+    },
+    plugins: [coreVite({ chunking: { mode: 'compact' } })],
+    server: { host: '127.0.0.1', port: 0 },
+  });
+  const errors: string[] = [];
+  const islandRequests: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('request', (request) => {
+    if (request.url().includes('/src/Counter.js')) islandRequests.push(request.url());
+  });
+  try {
+    await server.listen();
+    const origin = server.resolvedUrls?.local[0];
+    if (!origin) throw new Error('Vite did not expose a local development URL');
+    await page.goto(origin);
+    expect(await page.locator('#mounted').count()).toBe(0);
+    expect(islandRequests).toEqual([]);
+    await page.setViewportSize({ width: 2200, height: 720 });
+    await expect(page.locator('#mounted')).toHaveText('mounted');
+    expect(islandRequests).toHaveLength(1);
+    expect(errors).toEqual([]);
+  } finally {
+    await server.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
 
 type Scenario = {
   name: string;

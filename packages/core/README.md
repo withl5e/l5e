@@ -24,7 +24,7 @@ export default defineConfig({
 See the root README and `examples/basic` for a full app.
 
 Compact chunking is experimental and opt-in. The staged activation behavior and
-`islandRuntime` option below require the `1.1.0-alpha.2` prerelease:
+`islandRuntime` option below require the `1.1.0-alpha.3` prerelease:
 
 ```ts
 coreVite({
@@ -48,6 +48,9 @@ lazy. List state that must survive page-bundle swaps in `shared`; list React
 contexts or client caches that multiple islands must share in `islandRuntime`.
 Only the configured static closure is included, and dynamic imports are not
 promoted. Compact mode requires native import-map support.
+
+Compact chunking applies to production builds. Development keeps Vite source modules
+and HMR, and its Network requests are not subject to the production three-file limit.
 
 The alpha renderer bridge expects Vite to emit one entry facade and one canonical
 renderer export chunk. A different renderer shape is rejected during server setup
