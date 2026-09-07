@@ -9,7 +9,9 @@ import type { ViteDevServer } from 'vite';
 import { createContext, type MiddlewareHandler, type RewritePayload } from '../middleware';
 import { bundleCss, bundleScripts, getBundledFile } from './bundler';
 import type { RenderResult, RequestInfo } from './entry-server';
-import { resolveGlobalStyleHref } from './global-style';
+import { resolveGlobalStyleHref, withAssetBase } from './global-style';
+import { createScriptBundlePolicy, type ScriptBundlePolicy } from './script-bundle-policy';
+import type { Manifest } from 'vite';
 import { escapeProp } from './render';
 import { createHeadersFromExpressRequest, parseCookies } from './request';
 
@@ -215,6 +217,7 @@ async function createPageResponse({
   distClientDir,
   isProduction,
   assetBase,
+  scriptPolicy,
 }: {
   rendered: RenderResult;
   template: string;
@@ -223,6 +226,7 @@ async function createPageResponse({
   distClientDir: string;
   isProduction: boolean;
   assetBase: string;
+  scriptPolicy?: ScriptBundlePolicy;
 }): Promise<globalThis.Response> {
   const rawResponse = createRawResponse(rendered);
   if (rawResponse) {
@@ -277,34 +281,26 @@ async function createPageResponse({
   }
 
   if (isProduction && manifest) {
-    scriptSrcList = scriptSrcList.filter((src) => !src.includes('.global.'));
+    scriptSrcList = scriptSrcList.filter(
+      (src) => src.replace(/^\//, '') !== 'src/client.global.ts',
+    );
     cssSrcList = cssSrcList.filter((src) => !src.includes('.global.'));
 
     const cssFiles = new Set<string>();
     const preloadFiles = new Set<string>();
 
+    const visitedEntries = new Set<string>();
     function collectFromEntry(entryKey: string): { file: string | null } {
       const entry = manifest![entryKey];
       if (!entry) return { file: null };
-
-      if (entry.css) entry.css.forEach((css: string) => cssFiles.add(css));
-      if (entry.imports) {
-        entry.imports.forEach((importKey: string) => {
-          const importedChunk = manifest![importKey];
-          if (importedChunk?.file) preloadFiles.add(importedChunk.file);
-          if (importedChunk?.css) {
-            importedChunk.css.forEach((css: string) => cssFiles.add(css));
-          }
-          if (importedChunk?.imports) {
-            importedChunk.imports.forEach((key: string) => {
-              const chunk = manifest![key];
-              if (chunk?.file) preloadFiles.add(chunk.file);
-              if (chunk?.css) chunk.css.forEach((css: string) => cssFiles.add(css));
-            });
-          }
-        });
+      if (!visitedEntries.has(entryKey)) {
+        visitedEntries.add(entryKey);
+        for (const css of entry.css || []) cssFiles.add(css);
+        for (const key of entry.imports || []) {
+          const dependency = collectFromEntry(key);
+          if (dependency.file) preloadFiles.add(dependency.file);
+        }
       }
-
       return { file: entry.file };
     }
 
@@ -326,27 +322,39 @@ async function createPageResponse({
     }
 
     if (mappedScripts.length > 0) {
-      const bundledScript = await bundleScripts(mappedScripts, distClientDir);
-      scriptSrcList = bundledScript.filename ? [`/${bundledScript.filename}`] : mappedScripts;
+      const bundledScript = await bundleScripts(mappedScripts, distClientDir, scriptPolicy);
+      scriptSrcList = bundledScript.filename
+        ? [withAssetBase(assetBase, bundledScript.filename)]
+        : mappedScripts.map((file) => withAssetBase(assetBase, file));
     }
 
-    if (mappedCssFiles.length > 0) {
-      const bundledCss = await bundleCss(mappedCssFiles, distClientDir);
+    if (cssFiles.size > 0) {
+      const bundledCss = await bundleCss(
+        [...cssFiles].map((file) => `/${file}`),
+        distClientDir,
+      );
       if (bundledCss.filename) {
-        cssSrcList = [`/${bundledCss.filename}`];
+        cssSrcList = [withAssetBase(assetBase, bundledCss.filename)];
       }
     }
 
+    cssFiles.clear();
     const globalEntry = manifest['src/client.global.ts'];
+    collectFromEntry('src/client.global.ts');
+    for (const cssFile of cssFiles) appendStylesheet(withAssetBase(assetBase, cssFile), true);
     if (globalEntry) {
       if (globalEntry.css && globalEntry.css.length > 0) {
         globalEntry.css.forEach((cssFile: string) => {
-          appendStylesheet(`/${cssFile}`, true);
+          appendStylesheet(withAssetBase(assetBase, cssFile), true);
         });
       }
       if (globalEntry.file) {
-        globalScripts.push(`/${globalEntry.file}`);
+        globalScripts.push(withAssetBase(assetBase, globalEntry.file));
       }
+    }
+
+    for (const file of preloadFiles) {
+      extraHead += `<link rel="modulepreload" crossorigin href="${escapeProp(withAssetBase(assetBase, file))}">`;
     }
 
     if (islandEntries.length > 0) {
@@ -354,7 +362,7 @@ async function createPageResponse({
       for (const island of islandEntries) {
         const entry = manifest[island.src];
         if (entry?.file) {
-          islandMap[island.key] = `/${entry.file}`;
+          islandMap[island.key] = withAssetBase(assetBase, entry.file);
         }
       }
       if (Object.keys(islandMap).length > 0) {
@@ -406,9 +414,9 @@ async function createPageResponse({
   const html = rendered.rawHtml
     ? rendered.html || ''
     : templateWithLang
-      .replace(`<!--app-head-->`, () => (rendered.head ?? '') + extraHead)
-      .replace(`<!--app-html-->`, () => rendered.html ?? '')
-      .replace(`<!--app-scripts-->`, () => scriptsHtml);
+        .replace(`<!--app-head-->`, () => (rendered.head ?? '') + extraHead)
+        .replace(`<!--app-html-->`, () => rendered.html ?? '')
+        .replace(`<!--app-scripts-->`, () => scriptsHtml);
 
   const headers = new Headers({
     'Content-Type': 'text/html',
@@ -435,7 +443,6 @@ async function createPageResponse({
     cacheControlParts.push('must-revalidate');
 
     cdnCacheControlParts.push('public');
-
 
     headers.set('Cache-Control', cacheControlParts.join(', '));
     headers.set('CDN-Cache-Control', cdnCacheControlParts.join(', '));
@@ -482,6 +489,19 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
   // Add Vite or respective production middlewares
   let vite: ViteDevServer | undefined;
   const distClientDir = path.join(root, './dist/client');
+  // A production server owns one immutable build. Share its manifest/policy
+  // across requests, just like its cached HTML template and SSR module.
+  const productionManifest: Manifest | undefined = isProduction
+    ? JSON.parse(await fs.readFile(path.join(distClientDir, '.vite/manifest.json'), 'utf-8'))
+    : undefined;
+  let scriptPolicy: ScriptBundlePolicy | undefined;
+  if (productionManifest) {
+    try {
+      scriptPolicy = createScriptBundlePolicy(productionManifest, distClientDir, base);
+    } catch (error) {
+      console.warn('[bundler] Invalid build manifest; serving original script entries.', error);
+    }
+  }
 
   if (!isProduction) {
     const { createServer } = await import('vite');
@@ -516,7 +536,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
     // Route Ä‘á»ƒ serve bundled files tá»« memory map
     // Äáº·t route nÃ y trÆ°á»›c route HTML Ä‘á»ƒ catch request trÆ°á»›c
     app.get(
-      `${base === '/' ? '' : base}/bundle-:hash.:ext`,
+      withAssetBase(base, 'bundle-:hash.:ext'),
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
           const { hash, ext } = req.params;
@@ -670,13 +690,19 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
 
       const loadedMiddleware = await entryServerModule.loadMiddleware?.();
       const middlewareHandler: MiddlewareHandler =
-        typeof loadedMiddleware === 'function' ? loadedMiddleware : (_ctx, dummyNext) => dummyNext();
+        typeof loadedMiddleware === 'function'
+          ? loadedMiddleware
+          : (_ctx, dummyNext) => dummyNext();
 
       // If middleware short-circuits (returns its own Response — a redirect, a
       // 403, ...) instead of calling `next`, this callback never runs and that
       // response wins, same as it would for a page request.
       const response = await middlewareHandler(middlewareContext, async (payload) => {
-        const nextRequest = createRewriteRequest(payload, middlewareContext.request, middlewareContext.url);
+        const nextRequest = createRewriteRequest(
+          payload,
+          middlewareContext.request,
+          middlewareContext.url,
+        );
         const requestInfo = {
           ...createRequestInfo(req, nextRequest, base, locals),
           path: req.originalUrl,
@@ -743,12 +769,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
         )) as EntryServerModule;
         render = entryServer.render;
         loadMiddleware = entryServer.loadMiddleware;
-        // Read manifest to map hashed assets
-        const manifestJson = await fs.readFile(
-          path.join(root, './dist/client/.vite/manifest.json'),
-          'utf-8',
-        );
-        manifest = JSON.parse(manifestJson);
+        manifest = productionManifest;
       }
 
       const loadedMiddleware = await loadMiddleware?.();
@@ -778,6 +799,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerC
           distClientDir,
           isProduction,
           assetBase: isProduction ? base : vite!.config.base,
+          scriptPolicy,
         });
       };
 
