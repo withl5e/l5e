@@ -10,7 +10,7 @@ order: 18
 A tooltip is a small HTML fragment, rendered by a normal view on the server, fetched and
 positioned on demand when a visitor hovers (desktop) or taps (mobile) a trigger element.
 The SSR HTML needs nothing but a few `data-*` attributes — no per-element JS, no client
-framework, no bundle cost until a visitor actually triggers one.
+framework. Only the small event loader belongs in the initial page bundle.
 
 ```ts
 // src/client.global.ts (or any client script — mount once)
@@ -32,6 +32,17 @@ event for the current device — `pointerenter` on desktop, `click` on mobile/to
 via user agent + a `(max-width: 768px)` media query). The actual positioning/fetch logic
 (`@floating-ui/dom`) is dynamically imported only when a trigger actually fires, so it
 costs nothing on pages that have triggers nobody hovers.
+
+`configureTooltip()` also stays lightweight at startup. The public `showTooltip()`
+and `showTooltipMobile()` helpers return promises and load the same runtime when
+called. Keep these dynamic boundaries when optimizing output: the renderer and
+Floating UI belong to the interaction, not `global`.
+
+```mermaid
+flowchart LR
+  Global[Global: loader + optional URL config] -->|hover or tap| Runtime[Tooltip runtime + Floating UI]
+  Runtime -->|fetch| HTML[Tooltip HTML]
+```
 
 ## The fetch, and the route that serves it
 
