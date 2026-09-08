@@ -117,8 +117,12 @@ async function fixture(scenario: Scenario) {
   await write(
     'src/client.global.ts',
     scenario.globalStore
-      ? `import { store } from './session'; import { store as secondStore } from './session-two'; import { globalOwned } from './global-owned'; window.globalStore = store; window.secondStoreFromGlobal = secondStore; window.globalOwnedFromGlobal = globalOwned;`
-      : `import { globalOwned } from './global-owned'; window.bootstrapRan = true; window.globalOwnedFromGlobal = globalOwned;`,
+      ? `import { store } from './session'; import { store as secondStore } from './session-two'; import { globalOwned } from './global-owned'; window.globalStore = store; window.secondStoreFromGlobal = secondStore; window.globalOwnedFromGlobal = globalOwned; window.loadGlobalSdk = () => import('./global-sdk');`
+      : `import { globalOwned } from './global-owned'; window.bootstrapRan = true; window.globalOwnedFromGlobal = globalOwned; window.loadGlobalSdk = () => import('./global-sdk');`,
+  );
+  await write(
+    'src/global-sdk.ts',
+    `window.globalSdkRuns = (window.globalSdkRuns || 0) + 1; export const sdk = {};`,
   );
   await write(
     'src/island-strategies.ts',
@@ -156,17 +160,22 @@ async function fixture(scenario: Scenario) {
     };
   `,
   );
-  await write('src/page-b.ts', `import { store } from './direct'; import { globalOwned } from './global-owned'; window.pageBStore = store; window.globalOwnedFromPageB = globalOwned;`);
+  await write(
+    'src/page-b.ts',
+    `import { store } from './direct'; import { globalOwned } from './global-owned'; window.pageBStore = store; window.globalOwnedFromPageB = globalOwned;`,
+  );
   await write(
     'src/react/Counter.ts',
     `
     import './Counter.css';
-    import { createElement, useSyncExternalStore } from 'react';
+    import { createElement, useContext, useSyncExternalStore } from 'react';
     import { store } from '../session';
+    import { actionContext, loadActionSdk } from '../ui-runtime';
     window.islandStore = store;
     export default function Counter() {
       const value = useSyncExternalStore(store.subscribe, store.get);
-      return createElement('button', { id: 'island-increment', onClick: () => store.set(value + 1) }, String(value));
+      useContext(actionContext);
+      return createElement('button', { id: 'island-increment', onClick: () => { store.set(value + 1); window.loadActionSdk = loadActionSdk; } }, String(value));
     }
   `,
   );
@@ -175,12 +184,21 @@ async function fixture(scenario: Scenario) {
     'src/react/CounterB.ts',
     `
     import { createElement, useState } from 'react';
+    import { loadActionSdk } from '../ui-runtime';
     window.counterBInitializations = (window.counterBInitializations || 0) + 1;
     export default function CounterB() {
       const [value, setValue] = useState(7);
-      return createElement('button', { id: 'counter-b', onClick: () => setValue(value + 1) }, String(value));
+      return createElement('button', { id: 'counter-b', onClick: () => { setValue(value + 1); window.loadActionSdk = loadActionSdk; } }, String(value));
     }
   `,
+  );
+  await write(
+    'src/ui-runtime.ts',
+    `import { createContext } from 'react'; export const actionContext = createContext(null); window.actionContext = actionContext; export const loadActionSdk = () => import('./action-sdk');`,
+  );
+  await write(
+    'src/action-sdk.ts',
+    `window.actionSdkRuns = (window.actionSdkRuns || 0) + 1; export const sdk = {};`,
   );
   await write(
     'src/lazy.ts',
@@ -202,20 +220,19 @@ async function fixture(scenario: Scenario) {
           scenario.chunks === 'compact'
             ? {
                 mode: 'compact',
-                shared: [
-                  { name: 'state', modules: ['~/session.ts', '~/session-two.ts'] },
-                ],
+                shared: [{ name: 'state', modules: ['~/session.ts', '~/session-two.ts'] }],
+                islandRuntime: { modules: ['~/ui-runtime.ts'] },
               }
             : scenario.chunks === 'configured'
-            ? {
-                shared: [
-                  { name: 'state', modules: ['~/session.ts', '~/lazy-sdk.ts'] },
-                  { name: 'react', packages: ['react', 'react-dom', 'scheduler'] },
-                ],
-              }
-            : scenario.chunks
-              ? false
-              : {},
+              ? {
+                  shared: [
+                    { name: 'state', modules: ['~/session.ts', '~/lazy-sdk.ts'] },
+                    { name: 'react', packages: ['react', 'react-dom', 'scheduler'] },
+                  ],
+                }
+              : scenario.chunks
+                ? false
+                : {},
       }),
     ],
     resolve: {
@@ -232,15 +249,12 @@ async function fixture(scenario: Scenario) {
       manifest: true,
       rolldownOptions: {
         input: Object.fromEntries(
-          ['common', 'direct', 'page-a', 'page-b', 'react/Counter', 'react/CounterB'].map((name) => [
-            name,
-            path.join(root, `src/${name}.ts`),
-          ]),
+          ['common', 'direct', 'page-a', 'page-b', 'react/Counter', 'react/CounterB'].map(
+            (name) => [name, path.join(root, `src/${name}.ts`)],
+          ),
         ),
         output:
-          scenario.chunks &&
-          scenario.chunks !== 'configured' &&
-          scenario.chunks !== 'compact'
+          scenario.chunks && scenario.chunks !== 'configured' && scenario.chunks !== 'compact'
             ? {
                 manualChunks: (id) => {
                   const normalized = id.replace(/\\/g, '/');
@@ -306,7 +320,12 @@ for (const scenario of [
   { name: 'automatic chunks', globalStore: true },
   { name: 'configured state and React groups', globalStore: true, chunks: 'configured' },
   { name: 'compact three-file contract', globalStore: true, chunks: 'compact' },
-  { name: 'compact contract under a base path', globalStore: true, chunks: 'compact', base: '/guide/' },
+  {
+    name: 'compact contract under a base path',
+    globalStore: true,
+    chunks: 'compact',
+    base: '/guide/',
+  },
   { name: 'store absent from global bootstrap', globalStore: false },
   { name: 'developer combines vendor and session', globalStore: true, chunks: 'together' },
   { name: 'developer splits vendor and renames session', globalStore: true, chunks: 'separate' },
@@ -364,6 +383,44 @@ for (const scenario of [
           compactInitialJs = new Set(jsUrls);
           expect(jsUrls.some((url) => url.includes('lazy-react-runtime'))).toBe(false);
           expect(jsUrls.some((url) => url.includes('Counter'))).toBe(false);
+
+          const shellFiles = jsUrls.map((url) => new URL(url).pathname.slice(1));
+          const mixedOwnerChunks = report.chunks.filter((chunk) => {
+            const groups = new Set(chunk.modules.map((mod) => mod.group));
+            return groups.has('global-owner') && groups.has('lazy-react-runtime');
+          });
+          expect(
+            mixedOwnerChunks.map((chunk) => ({
+              file: chunk.file,
+              modules: chunk.modules.map((mod) => `${mod.group}: ${mod.id}`),
+            })),
+            'A recursively claimed lazy runtime chunk must not absorb globally owned modules',
+          ).toEqual([]);
+          const shellModules = report.chunks
+            .filter((chunk) => shellFiles.some((file) => file.endsWith(chunk.file)))
+            .flatMap((chunk) => chunk.modules.map((mod) => mod.id));
+          expect(
+            shellModules.filter((id) =>
+              /^(?:npm:)?(?:react|react-dom|scheduler)(?:\/|$)|(?:^|\/)node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?(?:react|react-dom|scheduler)(?:\/|$)/.test(
+                id.replace(/\\/g, '/'),
+              ),
+            ),
+            `React-family modules attributed to initial shell:\n${shellModules.join('\n')}`,
+          ).toEqual([]);
+
+          const shellBodies = await Promise.all(
+            jsUrls.map(async (url) => ({ url, body: await (await request.get(url)).text() })),
+          );
+          for (const { url, body } of shellBodies) {
+            expect(
+              body,
+              `React production runtime bytes leaked into initial shell script ${url}`,
+            ).not.toContain('Minified React error #');
+            expect(
+              body,
+              `React DOM client runtime bytes leaked into initial shell script ${url}`,
+            ).not.toContain('__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE');
+          }
         }
       }
       expect(await page.evaluate(() => window.commonRunsAtDirect)).toBe(1);
@@ -392,6 +449,8 @@ for (const scenario of [
         ).toBe(false);
       }
       expect(await page.evaluate(() => window.lazySdkRuns)).toBeUndefined();
+      expect(await page.evaluate(() => window.globalSdkRuns)).toBeUndefined();
+      expect(await page.evaluate(() => window.actionSdkRuns)).toBeUndefined();
       await page.locator('#increment').click();
       await expect(page.locator('#plain')).toHaveText('1');
       if (scenario.chunks === 'compact') {
@@ -499,6 +558,13 @@ for (const scenario of [
       await page.locator('#island-increment').click();
       await expect(page.locator('#plain')).toHaveText('3');
       expect(await page.evaluate(() => window.storeInitializations)).toBe(1);
+      expect(await page.evaluate(() => window.globalSdkRuns)).toBeUndefined();
+      expect(await page.evaluate(() => window.actionSdkRuns)).toBeUndefined();
+      await page.evaluate(async () => {
+        await Promise.all([window.loadGlobalSdk(), window.loadActionSdk()]);
+      });
+      expect(await page.evaluate(() => window.globalSdkRuns)).toBe(1);
+      expect(await page.evaluate(() => window.actionSdkRuns)).toBe(1);
       await page.reload();
       await page.waitForFunction(() => !!window.pageAStore);
       expect(
