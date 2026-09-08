@@ -253,17 +253,20 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
           maxSize: rule.maxSize,
           includeDependenciesRecursively: options.mode === 'compact',
         })),
-        {
-          name: (id: string) =>
-            decisions.get(id)?.group === 'lazy-react-runtime' ? 'lazy-react-runtime' : null,
-          includeDependenciesRecursively: true,
-        },
+        // Reserve eager owners before recursively collecting the lazy UI closure.
+        // Otherwise a lazy hook's dynamic import can capture Vite's preload helper
+        // and force global to import the entire React renderer chunk for that helper.
         {
           name: (id: string) => {
             const group = decisions.get(id)?.group;
             return group === 'lazy-react-runtime' ? null : group || null;
           },
           includeDependenciesRecursively: false,
+        },
+        {
+          name: (id: string) =>
+            decisions.get(id)?.group === 'lazy-react-runtime' ? 'lazy-react-runtime' : null,
+          includeDependenciesRecursively: true,
         },
       ];
     },
@@ -274,6 +277,19 @@ export function createChunkPlanner(options: ChunkingOptions = {}) {
         warnings: [...warnings],
         chunks: Object.values(bundle).flatMap((chunk) => {
           if (chunk.type !== 'chunk') return [];
+          const moduleGroups = new Set(
+            Object.keys(chunk.modules).map((id) => decisions.get(id)?.group),
+          );
+          if (
+            options.mode === 'compact' &&
+            moduleGroups.has('global-owner') &&
+            moduleGroups.has('lazy-react-runtime')
+          ) {
+            throw new Error(
+              `[l5e chunking] ${chunk.fileName} mixes global-owned and lazy island runtime modules. ` +
+                'Keep eager owners separate before recursively collecting the lazy runtime.',
+            );
+          }
           const source = chunk.facadeModuleId ? portable(chunk.facadeModuleId) : null;
           const kind =
             source === 'src/client.global.ts'

@@ -3,6 +3,50 @@ import { coreVite } from '../src/core/vite-plugin';
 import { createChunkPlanner } from '../src/core/chunking';
 
 describe('client chunk configuration', () => {
+  it('rejects emitted chunks that mix eager global owners with lazy UI modules', async () => {
+    const planner = createChunkPlanner({
+      mode: 'compact',
+      islandRuntime: { modules: ['./ui-runtime.ts'] },
+    });
+    const helper = '\0vite/preload-helper.js';
+    const uiRuntime = '/app/src/ui-runtime.ts';
+    await planner.resolve('/app', async () => uiRuntime);
+    const module = (id: string, values: Record<string, unknown> = {}) => ({
+      id,
+      isEntry: false,
+      importedIds: [],
+      dynamicallyImportedIds: [],
+      importers: [],
+      dynamicImporters: [],
+      ...values,
+    });
+    planner.analyze([
+      module('/app/src/client.global.ts', { isEntry: true, importedIds: [helper] }),
+      module('\0virtual:l5e-compact-renderer', { isEntry: true, importedIds: [uiRuntime] }),
+      module(uiRuntime, { importedIds: [helper] }),
+      module(helper),
+    ] as any);
+
+    // The bundler's emitted placement must obey the planner, even if its recursive
+    // dependency collection would otherwise put an eager helper into the renderer.
+    expect(() =>
+      planner.report({
+        'mixed.js': {
+          type: 'chunk',
+          name: 'lazy-react-runtime',
+          fileName: 'mixed.js',
+          code: '',
+          facadeModuleId: null,
+          isEntry: false,
+          isDynamicEntry: false,
+          imports: [],
+          dynamicImports: [],
+          modules: { [helper]: {}, [uiRuntime]: {} },
+        },
+      } as any),
+    ).toThrow('mixes global-owned and lazy island runtime modules');
+  });
+
   it('rejects ambiguous names and invalid split targets before starting a build', () => {
     expect(() =>
       coreVite({

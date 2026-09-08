@@ -1,202 +1,122 @@
-# Runtime script bundles and shared modules
+# Runtime script bundling
 
-The application's Vite/Rolldown build decides chunk boundaries. L5E preserves
-those boundaries when combining the scripts selected by a rendered page.
-Use coreVite's chunking interface for shared groups, or chunking: false for raw
-Rolldown configuration. Neither needs a second runtime external list.
+Use compact mode to keep the initial page small and load React only when an island
+activates. It allows **at most three new JS assets for the shell and for each L5E
+island activation**, not three files over the page's entire lifetime.
 
-At server startup, L5E indexes the production manifest. Runtime bundling inlines
-selected page entries, while imports to emitted dependency chunks retain their
-original asset URLs. The index covers the entire build, including static and
-dynamic imports, global bootstrap and React island entries. An entry imported
-by another module also retains its original URL, even if selected on the page.
+The staged API is available since `1.1.0-alpha.2`; stable `1.0.1` does not include it.
+Use `1.1.0-alpha.3` for correct dev runtime selection and the fix that keeps eager
+helpers from pulling React into `global`.
 
-Within a runtime bundle, roots retain the SSR caller's insertion order (duplicates run once).
-Static external imports execute before inlined code. When a later root introduces
-a dependency or preserved entry that has not executed yet in that graph traversal,
-L5E isolates earlier private roots in runtime-generated chunks and combines the
-remaining safe suffix in the runtime entry. These chunks are scoped to the page's
-script combination; private roots never switch to canonical application URLs.
-This may require additional requests to preserve execution order. It prevents a
-later dependency from reading global state before an earlier entry initializes
-it. Dynamic imports do not create this barrier.
-
-This keeps one instance of an emitted shared module within a browser document.
-It works for stores, registries, caches, event buses and library runtime state.
-It does not merge distinct packages/module identities already present in the
-build, share state with SSR, or persist state between tabs or full reloads.
-
-`client.global.ts` remains the global bootstrap convention. Shared state does
-not need to be imported there or named `*.global.ts`. Existing names continue
-to work. Runtime bundling no longer identifies dependencies using `vendor-`,
-`chunk-`, or `.global` filename substrings.
-
-Dynamic imports retain their lazy boundary and build-generated preload/CSS
-behavior. Combining dependencies into a large vendor chunk can make more code
-load eagerly; that is a consequence of the application's build configuration.
-L5E does not split that chunk again at request time.
-
-## Compact mode
-
-`chunking: { mode: 'compact' }` is an experimental production mode that limits the
-initial shell and each L5E island activation to at most three **new** JavaScript
-assets. The limit is per loading stage, not for the document's whole lifetime:
-
-> The staged activation behavior and `islandRuntime` option described here are
-> available on the `1.1.0-alpha.2` prerelease. Stable `1.0.1` does not provide them.
-
-- the shell loads the global bootstrap, page bundle and, when needed, canonical
-  shared state;
-- a `load` island or a `visible` island already in the viewport activates just
-  after the shell and adds its own requests;
-- later islands and application dynamic imports add requests only when triggered.
-
-Already cached canonical assets are not new requests. Two different islands that
-activate concurrently can therefore have a union larger than three even when each
-activation stays within the limit. Application-owned dynamic imports, including SDKs,
-keep the chunk graph produced by Vite; audit those graphs separately rather than
-assuming L5E can force every arbitrary import below three files.
-
-### Download, evaluate and mount
-
-Compact mode treats three moments separately:
-
-1. **Download.** The shell downloads only shell assets. When an island's strategy
-   activates, L5E inserts module preloads for its complete known static JavaScript
-   closure, including the island and renderer roots. These requests are scheduled before
-   L5E waits for any root response, avoiding a parse-discover-request waterfall.
-2. **Evaluate.** Native ESM still controls dependency evaluation, live bindings,
-   cycles and side-effect order. Downloading or preloading an asset does not evaluate
-   it. A dynamic descendant is neither preloaded nor evaluated until its own import.
-3. **Mount or hydrate.** After the strategy activates, L5E waits for the activation's
-   CSS and imports, then mounts client-only markup or hydrates SSR markup. Hydration
-   does not run before the configured strategy.
-
-No lazy JavaScript is added to the initial HTML as an eager module preload. The
-activation plan is small manifest-derived metadata embedded in the page; the browser
-does not request a manifest at activation time. CSS belonging to an island remains
-lazy and is ready before that island mounts.
-
-Built-in strategies are `load`, `idle`, `visible`, `media` and `none`. A custom
-strategy registered with `registerMountStrategy` controls the same download →
-evaluate → mount/hydrate sequence by deciding when it calls `mount()`. `none` never
-activates the island automatically.
-
-### Ownership and canonical modules
-
-Compact mode accepts one `shared` group. List the store, cache, registry, or other
-module roots whose identity must survive imports from different page bundles. Their
-minimum static dependency closure joins the canonical shared bundle. For example:
+## Configure
 
 ```ts
-coreVite({
-  chunking: {
-    mode: 'compact',
-    shared: [{ name: 'state', modules: ['~/stores/session.ts'], packages: ['nanostores'] }],
-  },
-});
+import { defineConfig } from 'vite';
+import { coreVite } from '@withl5e/l5e/vite-plugin';
+
+export default defineConfig(({ command }) => ({
+  plugins: [
+    coreVite({
+      chunking:
+        command === 'build'
+          ? {
+              mode: 'compact',
+              shared: [{ name: 'state', modules: ['~/stores/session.ts'] }],
+            }
+          : undefined,
+    }),
+  ],
+}));
 ```
 
-This application does not need `islandRuntime`: its only explicit cross-page identity
-is the session store. A store belongs in `shared` because every consumer must observe
-the same mutable instance. Libraries and helpers stay with the global, page or island
-that owns them unless they are part of the store's minimum dependency closure or have
-a separate canonical identity requirement.
+Merge this into your existing Vite config; `~/` uses your application's alias.
+Omit `shared` if no state must be shared across page bundles. Compact mode accepts
+one shared group and includes its minimum static dependencies automatically.
+Development keeps source-module loading and HMR, without the production file limit.
 
-This is an explicit lifetime contract. L5E does not infer mutability from source text
-or package names. A module used only by separate page bundles remains private to each
-bundle unless its state root is configured. Modules statically shared by global and
-page code are owned and exported by the global bundle so live bindings and one-time
-initialization are preserved. A dynamic-only global overlap is rejected because
-promoting it would change initialization timing.
-
-In alpha.2, libraries that must be canonical across islands but should remain out of the shell
-can join the lazy renderer runtime. Package selectors accept portable package roots or
-subpaths; module selectors go through Vite resolution, so aliases such as `~/` remain
-application-defined:
+If islands share a React context, hook or query client, add `islandRuntime` alongside
+`shared`. React and React DOM already belong to the lazy runtime:
 
 ```ts
-coreVite({
-  chunking: {
-    mode: 'compact',
-    shared: [{ name: 'state', modules: ['~/stores/session.ts'], packages: ['nanostores'] }],
-    islandRuntime: {
-      packages: ['@nanostores/react', '@tanstack/react-query'],
-      modules: ['~/client/use-session.ts', '~/client/query-client.ts'],
-    },
-  },
-});
+islandRuntime: {
+  packages: ['@nanostores/react', '@tanstack/react-query'],
+  modules: ['~/client/use-session.ts', '~/client/query-client.ts'],
+},
 ```
 
-Only the selected roots and their static closure join this runtime. Shared/global
-ownership takes precedence, and dynamic descendants do not join it. This keeps React
-contexts and client caches single-instance without downloading private island code or
-an SDK when the first island activates. An unresolved selector fails the build.
+Select only roots needed by your app. Their static dependencies join the runtime;
+shared/global ownership takes precedence and dynamic imports keep their own trigger.
 
-### Generated assets and limits
+## What each file does
 
-The production server creates a canonical renderer artifact and one artifact for each
-activated island's private static closure. Import maps make original renderer, shared
-and global URLs resolve to one final, base-aware URL across swaps. Compact mode thus
-requires native import-map support; the default bundling mode remains available for
-browsers outside that target.
+| Output          | Contents                                                                 | First needed             |
+| --------------- | ------------------------------------------------------------------------ | ------------------------ |
+| `global-*.js`   | `src/client.global.ts`, bootstrap and dependencies shared with page code | Initial shell            |
+| `bundle-*.js`   | Client scripts selected by the rendered page                             | Initial shell            |
+| `shared-*.js`   | Explicit stores, caches or registries and their minimum dependencies     | Shell, when needed       |
+| `renderer-*.js` | React, React DOM, Scheduler and configured `islandRuntime` modules       | First island activation  |
+| `island-*.js`   | One island's component and private static dependencies                   | That island's activation |
 
-The alpha renderer bridge supports one Vite entry facade plus one canonical inner
-renderer chunk. A different renderer shape fails during server setup. Mapping several
-minified export namespaces onto one URL could otherwise make equal aliases refer to
-different values, and import maps can map URLs but cannot rename exports.
+Islands reuse the renderer and shared state within the document. State is not shared
+with SSR, other tabs or a full reload. Keep singleton state in imported modules,
+because page entry side effects can run again in another page bundle.
 
-The application should preserve useful dynamic boundaries. For example, a dialog
-island can download its renderer, UI code and CSS when opened while its authentication
-SDK stays behind the submit action. Folding that SDK into `islandRuntime` would make
-the request count look smaller later by downloading unrelated bytes earlier.
+```mermaid
+flowchart TD
+  S["Initial shell: global + bundle + optional shared"]
+  T["Island trigger: load / idle / visible / media / custom"]
+  D["Download: preload renderer + island + static JS in parallel; load CSS"]
+  E["Evaluate: import modules in native ESM dependency order"]
+  M["Mount / hydrate when imports and CSS are ready"]
+  A["Later action: dynamic import of SDK or other optional code"]
+  S --> T --> D --> E --> M
+  M -. "For example: submit login" .-> A
+```
 
-One measured application using the alpha.2 release produced these stages:
+Preloading downloads code without running its side effects. L5E embeds the activation
+plan in the page, so activation needs no manifest request and schedules all known
+static JS before waiting for responses. Lazy entries are not preloaded by initial HTML.
 
-| Stage                       | New JS assets |                          Gzip bytes |
-| --------------------------- | ------------: | ----------------------------------: |
-| Main shell                  |             3 |                              81,965 |
-| Open auth dialog            |             2 |                             109,480 |
-| Login SDK action            |             2 | included in the next measured union |
-| Authenticated avatar island |             1 | included in the next measured union |
-| Login + avatar union        |             3 |                               8,752 |
-| Tracker shell               |             2 |                              12,473 |
-| Tracker `load` island       |             2 |                              84,230 |
+## Choose when to load
 
-Those numbers are evidence from one Vite 8 application, not a general performance
-promise. Compared with its alpha.1 build, the main shell was about 49% smaller by gzip,
-while shell plus auth-dialog activation was about 20% larger than alpha.1's entire
-tested lifecycle bundle. The byte measurements came from the pre-publish candidate at
-commit `76ca567`; release CI tested merge commit `5cbdf93` before publishing alpha.2.
+```tsx
+import { ClientIsland } from '@withl5e/l5e/island';
 
-Compact mode is opt-in. The default mode retains the existing emitted-chunk behavior
-and identity guarantees.
+<ClientIsland from="./react/Comments" props={{ postId }} mount="visible" />;
+```
 
-Only page entry code is recombined. Side effects local to a page entry can run
-again if that entry participates in another runtime bundle. Put state shared
-between independently loaded consumers in an imported module; do not rely on
-page entry execution as a document-wide singleton mechanism.
+Use `load` for immediately required UI, `visible` for content below the fold, `idle`
+for noncritical work, and `media` for a matching media query. `none` never mounts
+automatically. For dialogs or other interaction triggers, register a custom strategy
+with `registerMountStrategy` from `@withl5e/l5e/island/client` and call its mount
+callback on that interaction. The strategy delays download, evaluation and hydration.
+A `load` island or an already visible island starts loading just after the shell.
 
-Production manifest and bundle policy are scoped to a server's immutable build.
-Restart the server when replacing its build. Bundle cache keys include the
-output directory and manifest fingerprint. Incomplete policy metadata or an
-unknown emitted dependency causes fallback to original script URLs instead of
-silently copying module state. The build manifest itself is still required to
-map source entries to production assets.
+## Optimize and verify
 
-Regression checks:
+- Keep `client.global.ts` small. Importing React or a heavy UI library there makes it
+  part of the initial download regardless of the island's mount strategy.
+- Put shared mutable state in `shared`; put canonical UI contexts in `islandRuntime`.
+  Ordinary helpers follow their owner. Do not move every library into either group
+  just to reduce request counts.
+- Keep SDKs, editors and optional tools behind their actual action's `import()`.
+  Adding them to `islandRuntime` makes every first island pay that download cost.
+- Measure cold-cache **raw/gzip bytes and request timing per stage**. Check the shell
+  before triggering islands, then open or scroll to each island and exercise its UI.
+  Check fetched bodies as well as filenames: three requests can still carry React
+  bytes too early. `.vite/l5e-chunks.json` shows module ownership for diagnosis.
+- Test shared-state updates across islands and page swaps. Framework regression tests
+  also hold a response to verify static dependencies start downloading in parallel:
 
 ```sh
-pnpm --filter @withl5e/l5e build
 pnpm --filter @withl5e/l5e test
-pnpm --filter @withl5e/e2e-tests exec playwright install chromium
 pnpm --filter @withl5e/e2e-tests test:shared-modules
 ```
 
-The browser suite builds real multi-entry fixtures through `coreVite()`, serves
-them using the production server, and verifies shared identity across two
-runtime bundles and a lazy React island. It covers automatic chunks, combined
-or separate developer-defined vendor chunks, state absent from global bootstrap,
-an entry imported by another entry, dynamic CSS, fragment swap, full reload and
-an application base path. Core tests also cover transitive/cyclic imports,
-side effects, cache isolation, concurrent bundling, retry and metadata fallback.
+Concurrent island activations can together exceed three requests. Application-owned
+SDK imports retain Vite's chunk graph and need a separate audit. Compact mode requires
+native import maps. Restart the production server after replacing its build.
+
+Without compact mode, L5E preserves emitted dependency URLs and module identity;
+execution-order constraints can require additional requests. Use `chunking: false`
+when managing chunk placement directly through Rolldown.
